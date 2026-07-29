@@ -1,0 +1,174 @@
+# Review package: b24306f0848220d0ebf3e8b76df246e8f535e37b..92eae93
+
+## Commits
+92eae93 chore: scope ESM module type to src/ for TypeScript test execution
+5a01f24 feat: SAP AI Core OAuth2 token manager
+
+## Files changed
+ src/aicore/auth.test.ts | 56 +++++++++++++++++++++++++++++++++++++++++++++++++
+ src/aicore/auth.ts      | 21 +++++++++++++++++++
+ src/aicore/types.ts     | 33 +++++++++++++++++++++++++++++
+ src/package.json        |  3 +++
+ tsconfig.json           |  4 +++-
+ 5 files changed, 116 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/src/aicore/auth.test.ts b/src/aicore/auth.test.ts
+new file mode 100644
+index 0000000..3fae7b7
+--- /dev/null
++++ b/src/aicore/auth.test.ts
+@@ -0,0 +1,56 @@
++import { test, mock, beforeEach } from "node:test";
++import assert from "node:assert/strict";
++import { getToken, invalidateToken } from "./auth.ts";
++import type { ServiceKey } from "./types.ts";
++
++const key: ServiceKey = {
++  clientid: "id",
++  clientsecret: "secret",
++  url: "https://auth.example.com",
++  serviceurls: { AI_API_URL: "https://api.example.com" },
++};
++
++beforeEach(() => {
++  invalidateToken();
++});
++
++test("getToken fetches and caches a token", async () => {
++  let calls = 0;
++  mock.method(globalThis, "fetch", async () => {
++    calls++;
++    return {
++      ok: true,
++      json: async () => ({ access_token: "tok-1", expires_in: 3600 }),
++    } as Response;
++  });
++
++  const t1 = await getToken(key);
++  const t2 = await getToken(key);
++
++  assert.equal(t1, "tok-1");
++  assert.equal(t2, "tok-1");
++  assert.equal(calls, 1, "second call should hit the cache, not fetch again");
++  mock.reset();
++});
++
++test("getToken throws on non-ok response", async () => {
++  mock.method(globalThis, "fetch", async () => ({ ok: false, status: 401 }) as Response);
++  await assert.rejects(() => getToken(key), /Token fetch failed: 401/);
++  mock.reset();
++});
++
++test("invalidateToken forces a refetch", async () => {
++  let calls = 0;
++  mock.method(globalThis, "fetch", async () => {
++    calls++;
++    return { ok: true, json: async () => ({ access_token: `tok-${calls}`, expires_in: 3600 }) } as Response;
++  });
++
++  await getToken(key);
++  invalidateToken();
++  const t2 = await getToken(key);
++
++  assert.equal(calls, 2);
++  assert.equal(t2, "tok-2");
++  mock.reset();
++});
+diff --git a/src/aicore/auth.ts b/src/aicore/auth.ts
+new file mode 100644
+index 0000000..b9a41e9
+--- /dev/null
++++ b/src/aicore/auth.ts
+@@ -0,0 +1,21 @@
++import type { ServiceKey } from "./types.ts";
++
++let cached: { token: string; expiresAt: number } | null = null;
++
++export async function getToken(key: ServiceKey): Promise<string> {
++  if (cached && Date.now() < cached.expiresAt - 60_000) return cached.token;
++  const res = await fetch(`${key.url}/oauth/token?grant_type=client_credentials`, {
++    method: "POST",
++    headers: {
++      Authorization: "Basic " + Buffer.from(`${key.clientid}:${key.clientsecret}`).toString("base64"),
++    },
++  });
++  if (!res.ok) throw new Error(`Token fetch failed: ${res.status}`);
++  const body = (await res.json()) as { access_token: string; expires_in: number };
++  cached = { token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
++  return cached.token;
++}
++
++export function invalidateToken(): void {
++  cached = null;
++}
+diff --git a/src/aicore/types.ts b/src/aicore/types.ts
+new file mode 100644
+index 0000000..c1a333c
+--- /dev/null
++++ b/src/aicore/types.ts
+@@ -0,0 +1,33 @@
++export interface ServiceKey {
++  clientid: string;
++  clientsecret: string;
++  url: string;
++  serviceurls: { AI_API_URL: string };
++}
++
++export interface ToolCallFunction {
++  name: string;
++  arguments: string;
++}
++
++export interface ToolCall {
++  id: string;
++  type: "function";
++  function: ToolCallFunction;
++}
++
++export interface Message {
++  role: "system" | "user" | "assistant" | "tool";
++  content: string | null;
++  tool_calls?: ToolCall[];
++  tool_call_id?: string;
++}
++
++export interface AssistantMessage extends Message {
++  role: "assistant";
++}
++
++export interface ToolSchema {
++  type: "function";
++  function: { name: string; description: string; parameters: object };
++}
+diff --git a/src/package.json b/src/package.json
+new file mode 100644
+index 0000000..3dbc1ca
+--- /dev/null
++++ b/src/package.json
+@@ -0,0 +1,3 @@
++{
++  "type": "module"
++}
+diff --git a/tsconfig.json b/tsconfig.json
+index 103b365..9dfb911 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -2,14 +2,16 @@
+   "compilerOptions": {
+     "target": "ES2022",
+     "module": "commonjs",
+     "moduleResolution": "node",
+     "lib": ["ES2022"],
+     "outDir": "dist-check",
+     "rootDir": "src",
+     "strict": true,
+     "esModuleInterop": true,
+     "skipLibCheck": true,
+-    "resolveJsonModule": true
++    "resolveJsonModule": true,
++    "allowImportingTsExtensions": true,
++    "noEmit": true
+   },
+   "include": ["src/**/*.ts"]
+ }

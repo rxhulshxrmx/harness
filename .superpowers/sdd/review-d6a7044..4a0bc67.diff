@@ -1,0 +1,86 @@
+# Review package: d6a704413e1326e0a3011a4a61b93b816c7d9388..4a0bc67
+
+## Commits
+4a0bc67 feat: token estimation and session model
+
+## Files changed
+ src/agent/tokens.test.ts | 22 ++++++++++++++++++++++
+ src/agent/tokens.ts      | 12 ++++++++++++
+ src/state/session.ts     | 22 ++++++++++++++++++++++
+ 3 files changed, 56 insertions(+)
+
+## Diff
+diff --git a/src/agent/tokens.test.ts b/src/agent/tokens.test.ts
+new file mode 100644
+index 0000000..f603a48
+--- /dev/null
++++ b/src/agent/tokens.test.ts
+@@ -0,0 +1,22 @@
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { estimateTokens } from "./tokens.ts";
++
++test("estimateTokens is roughly chars/4 across all messages", () => {
++  const messages = [
++    { role: "user" as const, content: "a".repeat(400) },
++    { role: "assistant" as const, content: "b".repeat(400), tool_calls: undefined },
++  ];
++  assert.equal(estimateTokens(messages), 200);
++});
++
++test("estimateTokens counts tool_calls argument text", () => {
++  const messages = [
++    {
++      role: "assistant" as const,
++      content: null,
++      tool_calls: [{ id: "1", type: "function" as const, function: { name: "grep", arguments: "x".repeat(40) } }],
++    },
++  ];
++  assert.equal(estimateTokens(messages), 10);
++});
+diff --git a/src/agent/tokens.ts b/src/agent/tokens.ts
+new file mode 100644
+index 0000000..cd9fc21
+--- /dev/null
++++ b/src/agent/tokens.ts
+@@ -0,0 +1,12 @@
++import type { Message } from "../aicore/types.ts";
++
++export function estimateTokens(messages: Message[]): number {
++  let chars = 0;
++  for (const m of messages) {
++    chars += (m.content ?? "").length;
++    for (const call of m.tool_calls ?? []) {
++      chars += call.function.arguments.length;
++    }
++  }
++  return Math.ceil(chars / 4);
++}
+diff --git a/src/state/session.ts b/src/state/session.ts
+new file mode 100644
+index 0000000..c930b70
+--- /dev/null
++++ b/src/state/session.ts
+@@ -0,0 +1,22 @@
++import * as crypto from "node:crypto";
++import type { Message } from "../aicore/types.ts";
++
++export interface Session {
++  id: string;
++  title: string;
++  createdAt: string;
++  model: string;
++  messages: Message[];
++  filePath?: string;
++}
++
++export function createSession(firstUserText: string, model: string): Session {
++  const id = crypto.randomBytes(3).toString("hex");
++  return {
++    id,
++    title: firstUserText.slice(0, 60),
++    createdAt: new Date().toISOString(),
++    model,
++    messages: [],
++  };
++}

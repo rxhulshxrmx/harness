@@ -1,0 +1,43 @@
+# Review package: 4ccca1cd2b966cfed869fcfca5a267a042c42173..d6a7044
+
+## Commits
+d6a7044 feat: activation with forge.ping debug command (M0 checkpoint)
+
+## Files changed
+ src/extension.ts | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+## Diff
+diff --git a/src/extension.ts b/src/extension.ts
+new file mode 100644
+index 0000000..caf32a0
+--- /dev/null
++++ b/src/extension.ts
+@@ -0,0 +1,27 @@
++import * as vscode from "vscode";
++import { chat } from "./aicore/client.ts";
++
++export function activate(context: vscode.ExtensionContext) {
++  const output = vscode.window.createOutputChannel("Forge");
++  context.subscriptions.push(output);
++
++  context.subscriptions.push(
++    vscode.commands.registerCommand("forge.ping", async () => {
++      output.show(true);
++      output.appendLine("Sending: say hello");
++      try {
++        const reply = await chat(
++          [{ role: "user", content: "say hello" }],
++          [],
++          (delta) => output.append(delta),
++        );
++        output.appendLine("");
++        output.appendLine(`[done] finish content length: ${(reply.content ?? "").length}`);
++      } catch (err) {
++        output.appendLine(`[error] ${err instanceof Error ? err.message : String(err)}`);
++      }
++    }),
++  );
++}
++
++export function deactivate() {}
