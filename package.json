@@ -1,0 +1,95 @@
+{
+  "name": "forge",
+  "displayName": "Forge",
+  "publisher": "internal",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "package": "vsce package"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "forge",
+          "title": "Forge",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "forge": [
+        {
+          "type": "webview",
+          "id": "forge.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "forge.newSession",
+        "title": "Forge: New Session"
+      },
+      {
+        "command": "forge.ping",
+        "title": "Forge: Ping (debug)"
+      }
+    ],
+    "configuration": {
+      "properties": {
+        "forge.serviceKeyPath": {
+          "type": "string",
+          "default": ""
+        },
+        "forge.deploymentId": {
+          "type": "string",
+          "default": ""
+        },
+        "forge.resourceGroup": {
+          "type": "string",
+          "default": "default"
+        },
+        "forge.apiVersion": {
+          "type": "string",
+          "default": "2024-10-21"
+        },
+        "forge.model": {
+          "type": "string",
+          "default": ""
+        },
+        "forge.approvalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "default": "ask"
+        },
+        "forge.contextBudget": {
+          "type": "number",
+          "default": 100000
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "ignore": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.9.3"
+  }
+}
