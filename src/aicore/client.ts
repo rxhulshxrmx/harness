@@ -1,8 +1,10 @@
-import * as vscode from "vscode";
 import * as fs from "node:fs";
+import type * as vscodeTypes from "vscode";
 import { getToken, invalidateToken } from "./auth.ts";
 import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse.ts";
 import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from "./types.ts";
+
+declare function require(id: "vscode"): typeof vscodeTypes;
 
 function loadServiceKey(keyPath: string): ServiceKey {
   if (!keyPath) throw new Error("forge.serviceKeyPath is not set.");
@@ -10,6 +12,7 @@ function loadServiceKey(keyPath: string): ServiceKey {
 }
 
 function readConfig() {
+  const vscode = require("vscode");
   const cfg = vscode.workspace.getConfiguration("forge");
   return {
     serviceKeyPath: cfg.get<string>("serviceKeyPath", ""),
