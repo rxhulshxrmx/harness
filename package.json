@@ -43,6 +43,10 @@
       {
         "command": "forge.ping",
         "title": "Forge: Ping (debug)"
+      },
+      {
+        "command": "forge.runTurn",
+        "title": "Forge: Run Turn (debug)"
       }
     ],
     "configuration": {
