@@ -32,7 +32,7 @@ export function isAutoApproved(command: string): boolean {
   if (READ_ONLY_EXACT.has(trimmed)) return true;
   const firstWord = trimmed.split(/\s+/)[0];
   if (READ_ONLY_PREFIX_WORDS.includes(firstWord)) return true;
-  return AUTO_APPROVE_PREFIXES.some((p) => trimmed.startsWith(p));
+  return AUTO_APPROVE_PREFIXES.some((p) => trimmed === p || trimmed.startsWith(p + " "));
 }
 
 const NEVER_AUTO_WORDS = ["rm ", "del ", "git push", "git reset", "curl ", "wget ", "sudo "];

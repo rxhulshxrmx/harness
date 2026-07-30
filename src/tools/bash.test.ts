@@ -75,3 +75,18 @@ test("process substitution is never auto-approved, even riding an allowlisted pr
 test("legitimate commands with no process substitution remain auto-approved", () => {
   assert.equal(isAutoApproved("cat foo.txt"), true);
 });
+
+test("auto-approve prefixes require a word boundary, not just a text prefix match", () => {
+  assert.equal(isAutoApproved("npx tsc-something-else"), false);
+  assert.equal(isAutoApproved("pytestmalicious"), false);
+  assert.equal(isAutoApproved("npm test-evil-thing"), false);
+  assert.equal(isAutoApproved("npm testicular-destruction"), false);
+  assert.equal(isAutoApproved("npx tscx"), false);
+  assert.equal(isAutoApproved("pytest-fake-binary"), false);
+
+  assert.equal(isAutoApproved("npm test"), true);
+  assert.equal(isAutoApproved("npm test -- --watch"), true);
+  assert.equal(isAutoApproved("npx tsc --noEmit"), true);
+  assert.equal(isAutoApproved("pytest -k foo"), true);
+  assert.equal(isAutoApproved("pytest"), true);
+});
