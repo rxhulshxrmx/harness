@@ -1,0 +1,18 @@
+body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+#header { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--vscode-panel-border); align-items: center; }
+#header select { flex: 1; min-width: 0; }
+#messages { flex: 1; overflow-y: auto; padding: 8px; }
+.msg { margin-bottom: 12px; white-space: pre-wrap; word-wrap: break-word; }
+.msg.user { color: var(--vscode-textLink-foreground); }
+.msg code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }
+.msg pre { background: var(--vscode-textCodeBlock-background); padding: 8px; overflow-x: auto; border-radius: 4px; }
+.tool-call { cursor: pointer; opacity: 0.8; font-family: var(--vscode-editor-font-family); font-size: 0.9em; margin: 4px 0; }
+.tool-call .body { display: none; white-space: pre-wrap; margin-top: 4px; padding: 6px; background: var(--vscode-textCodeBlock-background); }
+.tool-call.expanded .body { display: block; }
+.approval { border: 1px solid var(--vscode-inputValidation-warningBorder); padding: 8px; margin: 8px 0; }
+.approval button { margin-right: 6px; }
+#touchedFiles { padding: 4px 8px; border-top: 1px solid var(--vscode-panel-border); font-size: 0.9em; display: none; }
+#touchedFiles.visible { display: block; }
+#touchedFiles span { cursor: pointer; text-decoration: underline; margin-right: 10px; }
+#inputBar { display: flex; padding: 6px; border-top: 1px solid var(--vscode-panel-border); }
+#input { flex: 1; resize: none; height: 44px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
