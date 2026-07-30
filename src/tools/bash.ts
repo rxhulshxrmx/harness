@@ -17,8 +17,18 @@ const READ_ONLY_EXACT = new Set([
 const READ_ONLY_PREFIX_WORDS = ["ls", "dir", "cat", "type", "grep", "rg", "find"];
 const AUTO_APPROVE_PREFIXES = ["npm test", "npx tsc", "pytest"];
 
+// Conservative "does this look like more than one simple command" guard.
+// Not a full shell parser — matches any operator that could chain, pipe,
+// substitute, or background additional commands onto an allowlisted prefix.
+const SHELL_METACHARACTER_RE = /;|&&|\|\||\||`|\$\(|\n|&/;
+
+export function hasShellMetacharacters(command: string): boolean {
+  return SHELL_METACHARACTER_RE.test(command);
+}
+
 export function isAutoApproved(command: string): boolean {
   const trimmed = command.trim();
+  if (hasShellMetacharacters(trimmed)) return false;
   if (READ_ONLY_EXACT.has(trimmed)) return true;
   const firstWord = trimmed.split(/\s+/)[0];
   if (READ_ONLY_PREFIX_WORDS.includes(firstWord)) return true;
@@ -29,7 +39,13 @@ const NEVER_AUTO_WORDS = ["rm ", "del ", "git push", "git reset", "curl ", "wget
 
 export function isNeverAutoApproved(command: string): boolean {
   const trimmed = command.trim();
-  if (NEVER_AUTO_WORDS.some((w) => trimmed.startsWith(w) || trimmed.includes(` ${w}`))) return true;
+  if (
+    NEVER_AUTO_WORDS.some((w) => {
+      const word = w.trim();
+      return trimmed.startsWith(w) || new RegExp(`(^|[^a-zA-Z0-9_])${word}`).test(trimmed);
+    })
+  )
+    return true;
   if (/[>]/.test(trimmed)) return true;
   if (/\bsudo\b/.test(trimmed)) return true;
   if (/(^|\s)\/(?!$)/.test(trimmed) && !trimmed.startsWith("git ")) return true;
