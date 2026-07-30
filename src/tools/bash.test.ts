@@ -76,6 +76,20 @@ test("legitimate commands with no process substitution remain auto-approved", ()
   assert.equal(isAutoApproved("cat foo.txt"), true);
 });
 
+test("bare output redirection is never auto-approved on its own, without relying on isNeverAutoApproved", () => {
+  assert.equal(isAutoApproved("cat foo > /etc/passwd"), false);
+  assert.equal(isAutoApproved("ls > /tmp/x"), false);
+});
+
+test("combined auto-approval decision rejects an allowlisted prefix riding a redirect", () => {
+  const cmd = "grep foo bar.txt > /etc/cron.d/evil";
+  assert.equal(isAutoApproved(cmd) && !isNeverAutoApproved(cmd), false);
+});
+
+test("legitimate commands with no redirection remain auto-approved after the fix", () => {
+  assert.equal(isAutoApproved("cat foo.txt"), true);
+});
+
 test("auto-approve prefixes require a word boundary, not just a text prefix match", () => {
   assert.equal(isAutoApproved("npx tsc-something-else"), false);
   assert.equal(isAutoApproved("pytestmalicious"), false);
