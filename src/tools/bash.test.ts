@@ -65,3 +65,13 @@ test("hasShellMetacharacters detects chaining/injection operators", () => {
   }
   assert.equal(hasShellMetacharacters("npm test -- --watch"), false);
 });
+
+test("process substitution is never auto-approved, even riding an allowlisted prefix", () => {
+  assert.equal(isAutoApproved("cat <(shutdown now)"), false);
+  assert.equal(isAutoApproved("ls <(reboot)"), false);
+  assert.equal(isAutoApproved("find . -name x <(id)"), false);
+});
+
+test("legitimate commands with no process substitution remain auto-approved", () => {
+  assert.equal(isAutoApproved("cat foo.txt"), true);
+});

@@ -20,7 +20,7 @@ const AUTO_APPROVE_PREFIXES = ["npm test", "npx tsc", "pytest"];
 // Conservative "does this look like more than one simple command" guard.
 // Not a full shell parser — matches any operator that could chain, pipe,
 // substitute, or background additional commands onto an allowlisted prefix.
-const SHELL_METACHARACTER_RE = /;|&&|\|\||\||`|\$\(|\n|&/;
+const SHELL_METACHARACTER_RE = /;|&&|\|\||\||`|\$\(|<\(|>\(|\n|&/;
 
 export function hasShellMetacharacters(command: string): boolean {
   return SHELL_METACHARACTER_RE.test(command);
