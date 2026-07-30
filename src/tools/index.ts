@@ -7,6 +7,7 @@ declare function require(id: "vscode"): typeof vscodeTypes;
 export interface ToolContext {
   workspaceRoot: string;
   signal: AbortSignal;
+  requestApproval: (command: string) => Promise<boolean>;
 }
 
 export interface ToolDefinition {

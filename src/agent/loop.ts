@@ -46,6 +46,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
         const result = await runTool(call.function.name, call.function.arguments, {
           workspaceRoot: getWorkspaceRoot(),
           signal,
+          requestApproval: ui.requestApproval,
         });
         const msg = { role: "tool" as const, tool_call_id: call.id, content: result };
         session.messages.push(msg);

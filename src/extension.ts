@@ -6,6 +6,7 @@ import "./tools/readFile.ts";
 import "./tools/listDir.ts";
 import "./tools/grep.ts";
 import "./tools/searchReplace.ts";
+import "./tools/bash.ts";
 
 export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Forge");
