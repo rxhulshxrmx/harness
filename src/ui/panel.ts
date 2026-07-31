@@ -63,6 +63,9 @@ export class ForgePanel implements vscode.WebviewViewProvider {
         this.postState();
         break;
       case "userSend":
+        if (this.controller !== null) {
+          break;
+        }
         await this.startTurn(msg.text);
         break;
       case "approve":
@@ -77,6 +80,11 @@ export class ForgePanel implements vscode.WebviewViewProvider {
       }
       case "stop":
         this.controller?.abort();
+        if (this.pendingApproval) {
+          this.pendingApproval.resolve(false);
+          this.pendingApproval = null;
+        }
+        this.postState();
         break;
       case "newSession":
         this.session = createSession("", "");
