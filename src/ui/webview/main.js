@@ -1,7 +1,17 @@
 const vscode = acquireVsCodeApi();
 const el = (id) => document.getElementById(id);
 
-let state = { session: { messages: [] }, streamingText: "", pendingApproval: null, touchedFiles: [], sessionList: [], approvalMode: "ask" };
+let state = {
+  session: { messages: [] },
+  streamingText: "",
+  pendingApproval: null,
+  touchedFiles: [],
+  sessionList: [],
+  approvalMode: "ask",
+  model: "GPT-5",
+  streaming: false,
+};
+let historyOpen = false;
 
 function renderMarkdown(text) {
   const container = document.createElement("div");
@@ -74,7 +84,7 @@ function appendInline(parent, text) {
   }
 }
 
-function render() {
+function renderMessages() {
   const messagesEl = el("messages");
   messagesEl.innerHTML = "";
 
@@ -84,15 +94,16 @@ function render() {
       const currentTurn = turnIndex++;
       const div = document.createElement("div");
       div.className = "msg user";
-      const text = document.createElement("span");
-      text.textContent = msg.content;
-      div.appendChild(text);
       const rewindBtn = document.createElement("button");
       rewindBtn.className = "rewind-btn";
       rewindBtn.textContent = "⟲";
       rewindBtn.title = "Rewind to before this turn";
       rewindBtn.addEventListener("click", () => vscode.postMessage({ type: "rewindToTurn", turnIndex: currentTurn }));
       div.appendChild(rewindBtn);
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = msg.content;
+      div.appendChild(bubble);
       messagesEl.appendChild(div);
     } else if (msg.role === "assistant") {
       if (msg.content) {
@@ -104,7 +115,7 @@ function render() {
       for (const call of msg.tool_calls ?? []) {
         const div = document.createElement("div");
         div.className = "tool-call";
-        div.textContent = `▸ ${call.function.name} ${call.function.arguments}`;
+        div.textContent = `${call.function.name} ${call.function.arguments}`;
         const body = document.createElement("div");
         body.className = "body";
         body.textContent = call.function.arguments;
@@ -116,7 +127,7 @@ function render() {
       const div = document.createElement("div");
       div.className = "tool-call";
       const preview = (msg.content || "").split("\n")[0].slice(0, 80);
-      div.textContent = `  └ ${preview}`;
+      div.textContent = preview;
       const body = document.createElement("div");
       body.className = "body";
       body.textContent = msg.content;
@@ -136,80 +147,155 @@ function render() {
   if (state.pendingApproval) {
     const div = document.createElement("div");
     div.className = "approval";
-    const label = document.createElement("div");
-    label.textContent = `Run: ${state.pendingApproval.command}`;
-    div.appendChild(label);
+    if (state.pendingApproval.severity) div.classList.add(`severity-${state.pendingApproval.severity}`);
+
+    const command = document.createElement("div");
+    command.className = "command";
+    command.textContent = state.pendingApproval.command;
+    div.appendChild(command);
+
     if (state.pendingApproval.reason) {
       const reason = document.createElement("div");
       reason.className = "reason";
       if (state.pendingApproval.severity) {
         const badge = document.createElement("span");
-        badge.className = `severity ${state.pendingApproval.severity}`;
+        badge.className = `severity-badge ${state.pendingApproval.severity}`;
         badge.textContent = state.pendingApproval.severity === "dangerous" ? "⚠ dangerous" : "⚠ caution";
         reason.appendChild(badge);
       }
       reason.appendChild(document.createTextNode(state.pendingApproval.reason));
       div.appendChild(reason);
     }
+
+    const actions = document.createElement("div");
+    actions.className = "approval-actions";
     const approveBtn = document.createElement("button");
+    approveBtn.className = "approve";
     approveBtn.textContent = "Approve";
     approveBtn.addEventListener("click", () => vscode.postMessage({ type: "approve", id: state.pendingApproval.id }));
     const denyBtn = document.createElement("button");
     denyBtn.textContent = "Deny";
     denyBtn.addEventListener("click", () => vscode.postMessage({ type: "deny", id: state.pendingApproval.id }));
-    div.appendChild(approveBtn);
-    div.appendChild(denyBtn);
+    actions.appendChild(approveBtn);
+    actions.appendChild(denyBtn);
+    div.appendChild(actions);
     messagesEl.appendChild(div);
   }
 
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
 
+function renderTouchedFiles() {
   const touchedEl = el("touchedFiles");
   touchedEl.innerHTML = "";
   touchedEl.classList.toggle("visible", state.touchedFiles.length > 0);
   for (const file of state.touchedFiles) {
-    const row = document.createElement("span");
-    const nameSpan = document.createElement("a");
-    nameSpan.textContent = file;
-    nameSpan.addEventListener("click", () => vscode.postMessage({ type: "openDiff", file }));
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = file;
+    name.title = file;
+    name.addEventListener("click", () => vscode.postMessage({ type: "openDiff", file }));
     const revertBtn = document.createElement("button");
-    revertBtn.textContent = "revert";
+    revertBtn.className = "revert-btn";
+    revertBtn.title = "Revert";
+    revertBtn.textContent = "↺";
     revertBtn.addEventListener("click", () => vscode.postMessage({ type: "revertFile", file }));
-    row.appendChild(nameSpan);
-    row.appendChild(revertBtn);
-    touchedEl.appendChild(row);
+    chip.appendChild(name);
+    chip.appendChild(revertBtn);
+    touchedEl.appendChild(chip);
   }
-
-  const sel = el("sessionSelect");
-  sel.innerHTML = "";
-  for (const s of state.sessionList) {
-    const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = s.title;
-    if (s.id === state.session.id) opt.selected = true;
-    sel.appendChild(opt);
-  }
-
-  el("approvalModeBtn").textContent = state.approvalMode;
-  el("stopBtn").disabled = !state.streaming;
 }
 
-el("sendBtn").addEventListener("click", () => {
+function renderHistoryPanel() {
+  const panel = el("historyPanel");
+  panel.innerHTML = "";
+  panel.classList.toggle("open", historyOpen);
+  if (!historyOpen) return;
+
+  if (state.sessionList.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "No sessions yet.";
+    panel.appendChild(empty);
+    return;
+  }
+
+  for (const s of state.sessionList) {
+    const row = document.createElement("div");
+    row.className = "history-row";
+    if (s.id === state.session.id) row.classList.add("active");
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = s.title || "(untitled)";
+    row.appendChild(title);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.title = "Delete session";
+    deleteBtn.textContent = "✕";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      vscode.postMessage({ type: "deleteSession", id: s.id });
+    });
+    row.appendChild(deleteBtn);
+    row.addEventListener("click", () => {
+      historyOpen = false;
+      vscode.postMessage({ type: "selectSession", id: s.id });
+    });
+    panel.appendChild(row);
+  }
+}
+
+function render() {
+  el("sessionTitle").textContent = state.session.title || "New session";
+  renderMessages();
+  renderTouchedFiles();
+  renderHistoryPanel();
+
+  const modeBtn = el("approvalModeBtn");
+  modeBtn.textContent = state.approvalMode === "auto" ? "Auto" : "Ask";
+  el("modelName").textContent = state.model || "GPT-5";
+
+  const sendBtn = el("sendBtn");
+  sendBtn.classList.toggle("stopping", state.streaming);
+  sendBtn.title = state.streaming ? "Stop" : "Send";
+  sendBtn.innerHTML = state.streaming
+    ? '<svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>'
+    : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V3.5M3.5 8 8 3.5 12.5 8"/></svg>';
+}
+
+function send() {
   const input = el("input");
+  if (state.streaming) {
+    vscode.postMessage({ type: "stop" });
+    return;
+  }
   if (!input.value.trim()) return;
   vscode.postMessage({ type: "userSend", text: input.value });
   input.value = "";
-});
+}
+
+el("sendBtn").addEventListener("click", send);
 el("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    el("sendBtn").click();
+    send();
   }
 });
 el("newSessionBtn").addEventListener("click", () => vscode.postMessage({ type: "newSession" }));
-el("stopBtn").addEventListener("click", () => vscode.postMessage({ type: "stop" }));
+el("historyBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  historyOpen = !historyOpen;
+  renderHistoryPanel();
+});
+document.addEventListener("click", (e) => {
+  if (historyOpen && !el("historyPanel").contains(e.target) && e.target !== el("historyBtn")) {
+    historyOpen = false;
+    renderHistoryPanel();
+  }
+});
 el("approvalModeBtn").addEventListener("click", () => vscode.postMessage({ type: "toggleApprovalMode" }));
-el("sessionSelect").addEventListener("change", (e) => vscode.postMessage({ type: "selectSession", id: e.target.value }));
 
 window.addEventListener("message", (event) => {
   if (event.data.type === "state") {

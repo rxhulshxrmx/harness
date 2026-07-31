@@ -3,7 +3,8 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { runTurn, type UiPort } from "../agent/loop.ts";
 import { createSession, type Session } from "../state/session.ts";
-import { listSessions, loadSession, newSessionFilePath, updateSessionTitle } from "../state/store.ts";
+import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, deleteSession } from "../state/store.ts";
+import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
 
@@ -103,6 +104,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
       approvalMode: vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask"),
+      model: vscode.workspace.getConfiguration("harness").get<string>("model", "") || "GPT-5",
     });
   }
 
@@ -155,6 +157,29 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
           this.touchedFiles = [];
           this.postState();
         }
+        break;
+      }
+      case "deleteSession": {
+        const root = this.tryGetWorkspaceRoot();
+        const entry = this.tryListSessions().find((s) => s.id === msg.id);
+        if (entry) {
+          try {
+            deleteSession(entry.filePath);
+            if (root) deleteCheckpointsFrom(root, msg.id, 0);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`Harness: failed to delete session: ${message}`);
+            break;
+          }
+        }
+        this.sessionList = this.sessionList.filter((s) => s.id !== msg.id);
+        if (this.session.id === msg.id) {
+          this.session = createSession("", "");
+          this.session.filePath = this.tryCreateSessionFilePath(this.session);
+          this.sessionList.unshift({ id: this.session.id, title: "New Session" });
+          this.touchedFiles = [];
+        }
+        this.postState();
         break;
       }
       case "toggleApprovalMode": {

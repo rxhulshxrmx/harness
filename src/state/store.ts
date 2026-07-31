@@ -46,6 +46,10 @@ export function rewriteStoreMessages(filePath: string, messages: Message[]): voi
   fs.writeFileSync(filePath, lines.join("\n") + "\n");
 }
 
+export function deleteSession(filePath: string): void {
+  fs.rmSync(filePath, { force: true });
+}
+
 export function updateSessionTitle(filePath: string, title: string): void {
   const lines = fs.readFileSync(filePath, "utf8").split("\n");
   const meta = JSON.parse(lines[0]);
