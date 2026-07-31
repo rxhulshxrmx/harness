@@ -9,6 +9,7 @@ import { appendToStore } from "../state/store.ts";
 import { diffTracker } from "../state/diffTracker.ts";
 import { interruptedToolResults } from "./toolResults.ts";
 import { classifyError } from "../aicore/errors.ts";
+import { saveCheckpoint } from "../state/checkpoints.ts";
 
 const MAX_STEPS = 40;
 
@@ -20,8 +21,10 @@ export interface UiPort {
 }
 
 export async function runTurn(session: Session, userText: string, ui: UiPort, signal: AbortSignal): Promise<void> {
-  session.messages.push({ role: "user", content: userText });
-  appendToStore(session, { role: "user", content: userText });
+  const turnIndex = session.messages.filter((m) => m.role === "user").length;
+  const userMessage = { role: "user" as const, content: userText };
+  session.messages.push(userMessage);
+  appendToStore(session, userMessage);
   diffTracker.beginTurn();
 
   try {
@@ -73,6 +76,27 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     // An abort is the user clicking Stop — expected, not an error to surface.
     if (classified.category !== "aborted") ui.showError(classified.message);
   } finally {
-    ui.showTurnDiff(diffTracker.endTurn());
+    const touchedFiles = diffTracker.endTurn();
+    // Found by reference, not by the count captured at turn start: a
+    // mid-turn compact() can shrink session.messages by replacing older
+    // messages with a summary, which would shift a plain index captured
+    // up front out from under this turn's actual position.
+    const messageCountBefore = session.messages.indexOf(userMessage);
+    if (messageCountBefore !== -1) {
+      const files: Record<string, string | null> = {};
+      const unrestorable: string[] = [];
+      for (const file of touchedFiles) {
+        const snapshot = diffTracker.getSnapshot(file);
+        if (snapshot === undefined) unrestorable.push(file);
+        else files[file] = snapshot;
+      }
+      try {
+        saveCheckpoint(getWorkspaceRoot(), session.id, { turnIndex, messageCountBefore, userText, files, unrestorable });
+      } catch {
+        // Best-effort — e.g. no workspace folder open. Rewind for this turn
+        // just won't be available; nothing else depends on it succeeding.
+      }
+    }
+    ui.showTurnDiff(touchedFiles);
   }
 }

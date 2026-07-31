@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import { runTurn, type UiPort } from "../agent/loop.ts";
 import { createSession, type Session } from "../state/session.ts";
 import { listSessions, loadSession, newSessionFilePath, updateSessionTitle } from "../state/store.ts";
+import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
 
 interface PendingApproval {
@@ -54,6 +55,14 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       return listSessions(getWorkspaceRoot());
     } catch {
       return [];
+    }
+  }
+
+  private tryGetWorkspaceRoot(): string | undefined {
+    try {
+      return getWorkspaceRoot();
+    } catch {
+      return undefined;
     }
   }
 
@@ -163,6 +172,35 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         // harness.revertFile is registered in Task 14; calling it before that is a silent no-op.
         vscode.commands.executeCommand("harness.revertFile", msg.file);
         break;
+      case "rewindToTurn": {
+        if (this.controller !== null) break; // don't rewind mid-turn
+        const root = this.tryGetWorkspaceRoot();
+        if (!root) break;
+        const choice = await vscode.window.showWarningMessage(
+          "Rewind to before this turn? Later messages will be discarded and any files it touched will be restored.",
+          { modal: true },
+          "Rewind",
+        );
+        if (choice !== "Rewind") break;
+        try {
+          const result = await rewindToTurn(root, this.session, msg.turnIndex);
+          if (!result) {
+            vscode.window.showInformationMessage("Harness: nothing to rewind for that turn.");
+            break;
+          }
+          if (result.unrestorable.length) {
+            vscode.window.showWarningMessage(
+              `Harness: could not restore (changed by a shell command): ${result.unrestorable.join(", ")}`,
+            );
+          }
+          this.touchedFiles = [];
+          this.postState();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          vscode.window.showErrorMessage(`Harness: rewind failed: ${message}`);
+        }
+        break;
+      }
     }
   }
 

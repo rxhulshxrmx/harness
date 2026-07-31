@@ -78,11 +78,21 @@ function render() {
   const messagesEl = el("messages");
   messagesEl.innerHTML = "";
 
+  let turnIndex = 0;
   for (const msg of state.session.messages) {
     if (msg.role === "user") {
+      const currentTurn = turnIndex++;
       const div = document.createElement("div");
       div.className = "msg user";
-      div.textContent = msg.content;
+      const text = document.createElement("span");
+      text.textContent = msg.content;
+      div.appendChild(text);
+      const rewindBtn = document.createElement("button");
+      rewindBtn.className = "rewind-btn";
+      rewindBtn.textContent = "⟲";
+      rewindBtn.title = "Rewind to before this turn";
+      rewindBtn.addEventListener("click", () => vscode.postMessage({ type: "rewindToTurn", turnIndex: currentTurn }));
+      div.appendChild(rewindBtn);
       messagesEl.appendChild(div);
     } else if (msg.role === "assistant") {
       if (msg.content) {

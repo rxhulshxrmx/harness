@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { appendToStore, listSessions, loadSession, newSessionFilePath, updateSessionTitle } from "./store.ts";
+import { appendToStore, listSessions, loadSession, newSessionFilePath, updateSessionTitle, rewriteStoreMessages } from "./store.ts";
 import { createSession } from "./session.ts";
 
 let dir: string;
@@ -66,4 +66,30 @@ test("updateSessionTitle rewrites the meta line's title while leaving other fiel
   const loaded = loadSession(session.filePath);
   assert.equal(loaded.title, "fourth message title");
   assert.equal(loaded.messages.length, 2);
+});
+
+test("rewriteStoreMessages replaces the message lines while preserving the meta line", () => {
+  const session = createSession("fifth", "gpt-4o");
+  session.filePath = newSessionFilePath(dir, session);
+  appendToStore(session, { role: "user", content: "fifth" });
+  appendToStore(session, { role: "assistant", content: "reply five" });
+  appendToStore(session, { role: "user", content: "follow-up" });
+
+  rewriteStoreMessages(session.filePath, [{ role: "user", content: "fifth" }]);
+
+  const loaded = loadSession(session.filePath);
+  assert.equal(loaded.title, "fifth");
+  assert.equal(loaded.messages.length, 1);
+  assert.equal(loaded.messages[0].content, "fifth");
+});
+
+test("rewriteStoreMessages can truncate to zero messages", () => {
+  const session = createSession("sixth", "gpt-4o");
+  session.filePath = newSessionFilePath(dir, session);
+  appendToStore(session, { role: "user", content: "sixth" });
+
+  rewriteStoreMessages(session.filePath, []);
+
+  const loaded = loadSession(session.filePath);
+  assert.equal(loaded.messages.length, 0);
 });

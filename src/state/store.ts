@@ -35,6 +35,17 @@ export function listSessions(workspaceRoot: string): { id: string; title: string
     .sort((a, b) => b.filePath.localeCompare(a.filePath));
 }
 
+// Rewrites the whole file (keeping the original meta line) so it contains
+// exactly `messages`. Used by rewind: splicing the append-only log by line
+// offset would be fragile once compaction markers are interspersed, since
+// those don't correspond 1:1 with message indices — rewriting from the
+// already-truncated in-memory array is always correct regardless.
+export function rewriteStoreMessages(filePath: string, messages: Message[]): void {
+  const firstLine = fs.readFileSync(filePath, "utf8").split("\n")[0];
+  const lines = [firstLine, ...messages.map((m) => JSON.stringify(m))];
+  fs.writeFileSync(filePath, lines.join("\n") + "\n");
+}
+
 export function updateSessionTitle(filePath: string, title: string): void {
   const lines = fs.readFileSync(filePath, "utf8").split("\n");
   const meta = JSON.parse(lines[0]);
