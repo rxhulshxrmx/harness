@@ -6,6 +6,7 @@ import { compact } from "./compaction.ts";
 import { getToolSchemas, runTool, getWorkspaceRoot } from "../tools/index.ts";
 import type { Session } from "../state/session.ts";
 import { appendToStore } from "../state/store.ts";
+import { diffTracker } from "../state/diffTracker.ts";
 
 const MAX_STEPS = 40;
 
@@ -19,6 +20,7 @@ export interface UiPort {
 export async function runTurn(session: Session, userText: string, ui: UiPort, signal: AbortSignal): Promise<void> {
   session.messages.push({ role: "user", content: userText });
   appendToStore(session, { role: "user", content: userText });
+  diffTracker.beginTurn();
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -56,5 +58,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     ui.showError(`Step budget (${MAX_STEPS}) exhausted for this turn.`);
   } catch (err) {
     ui.showError(err instanceof Error ? err.message : String(err));
+  } finally {
+    ui.showTurnDiff(diffTracker.endTurn());
   }
 }

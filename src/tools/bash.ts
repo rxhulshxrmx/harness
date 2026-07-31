@@ -1,10 +1,22 @@
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import * as os from "node:os";
 import type * as vscodeTypes from "vscode";
 import { registerTool, type ToolContext } from "./index.ts";
+import { diffTracker } from "../state/diffTracker.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
+
+function recordGitTouchedFiles(workspaceRoot: string) {
+  try {
+    const out = execSync("git diff --name-only", { cwd: workspaceRoot, encoding: "utf8" });
+    for (const file of out.split("\n").filter(Boolean)) {
+      diffTracker.snapshot(file, undefined);
+    }
+  } catch {
+    // not a git repo, or git unavailable — silently skip
+  }
+}
 
 const READ_ONLY_EXACT = new Set([
   "git status",
@@ -94,6 +106,7 @@ registerTool("bash", {
       let output = "";
       const timer = setTimeout(() => {
         child.kill();
+        recordGitTouchedFiles(ctx.workspaceRoot);
         resolve(output + `\n[killed: exceeded ${timeoutMs}ms timeout]`);
       }, timeoutMs);
 
@@ -101,11 +114,13 @@ registerTool("bash", {
       child.stderr.on("data", (d) => (output += d.toString()));
       child.on("close", (code) => {
         clearTimeout(timer);
+        recordGitTouchedFiles(ctx.workspaceRoot);
         resolve(output + `\n[exit code ${code}]`);
       });
       ctx.signal.addEventListener("abort", () => {
         clearTimeout(timer);
         child.kill();
+        recordGitTouchedFiles(ctx.workspaceRoot);
         resolve(output + "\n[aborted]");
       });
     });
