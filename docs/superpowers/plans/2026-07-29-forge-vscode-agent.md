@@ -1,10 +1,10 @@
-# Forge VS Code Agent Implementation Plan
+# Harness VS Code Agent Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build "Forge", a VS Code extension providing an agentic coding assistant powered entirely by SAP AI Core, running inside the extension host with no separate server process.
+**Goal:** Build "Harness", a VS Code extension providing an agentic coding assistant powered entirely by SAP AI Core, running inside the extension host with no separate server process.
 
-**Architecture:** A plain-function agent core (auth → streaming chat client → tool-calling loop) drives five tools (read_file, list_dir, grep, search_replace, bash) with a VS Code webview sidebar as the only UI. Diffs are tracked per-turn via file snapshots and rendered through `vscode.diff`. Sessions persist as JSONL under `.forge/sessions/`.
+**Architecture:** A plain-function agent core (auth → streaming chat client → tool-calling loop) drives five tools (read_file, list_dir, grep, search_replace, bash) with a VS Code webview sidebar as the only UI. Diffs are tracked per-turn via file snapshots and rendered through `vscode.diff`. Sessions persist as JSONL under `.harness/sessions/`.
 
 **Tech Stack:** TypeScript, Node 20+ stdlib, VS Code Extension API, esbuild (bundler), `ignore` (npm, gitignore parsing — the only production dependency). Tests use Node's built-in `node:test` + `node:assert` runner (no third-party test framework), run with `node --experimental-strip-types --test` (verified working on this machine: Node v24.6.0).
 
@@ -17,7 +17,7 @@
 - The ONLY external network calls are to SAP AI Core (token endpoint + inference endpoint).
 - No third-party agent frameworks (no LangChain, LangGraph, Vercel AI SDK). Only allowed npm production dependency: `ignore`.
 - Plain, readable functions. No classes deeper than one level of inheritance. No decorators.
-- Credentials come from a JSON service key file at `forge.serviceKeyPath`. Never hardcode credentials. Never log tokens.
+- Credentials come from a JSON service key file at `harness.serviceKeyPath`. Never hardcode credentials. Never log tokens.
 - All workspace paths resolved relative to the first workspace folder; any resolved path that escapes the root (`path.relative` starts with `..`) is rejected.
 - Tool results truncated to 20,000 chars, middle-elided (head 8k + `"\n…[truncated]…\n"` + tail 8k) before entering the transcript.
 - MAX_STEPS per turn = 40.
@@ -26,7 +26,7 @@
 ## File Structure
 
 ```
-forge/
+harness/
   package.json  tsconfig.json  esbuild.mjs
   src/
     extension.ts
@@ -49,12 +49,12 @@ Files needing a live `vscode` API (webview rendering, `WorkspaceEdit`, `workspac
 - Create: `package.json`, `tsconfig.json`, `esbuild.mjs`, `.gitignore`, `.vscode/launch.json`
 
 **Interfaces:**
-- Produces: npm scripts `build`, `watch`, `test`, `package`; the `forge.*` configuration keys later tasks read via `vscode.workspace.getConfiguration("forge")`.
+- Produces: npm scripts `build`, `watch`, `test`, `package`; the `harness.*` configuration keys later tasks read via `vscode.workspace.getConfiguration("harness")`.
 
 - [ ] **Step 1: Init git and npm**
 
 ```bash
-cd /Users/rahulsharma/Developer/Forge
+cd /Users/rahulsharma/Developer/Harness
 git init
 npm init -y
 npm install --save ignore
@@ -112,8 +112,8 @@ if (watch) {
 
 ```jsonc
 {
-  "name": "forge",
-  "displayName": "Forge",
+  "name": "harness",
+  "displayName": "Harness",
   "publisher": "internal",
   "version": "0.0.1",
   "private": true,
@@ -129,24 +129,24 @@ if (watch) {
   },
   "contributes": {
     "viewsContainers": {
-      "activitybar": [{ "id": "forge", "title": "Forge", "icon": "media/icon.svg" }]
+      "activitybar": [{ "id": "harness", "title": "Harness", "icon": "media/icon.svg" }]
     },
     "views": {
-      "forge": [{ "type": "webview", "id": "forge.chat", "name": "Chat" }]
+      "harness": [{ "type": "webview", "id": "harness.chat", "name": "Chat" }]
     },
     "commands": [
-      { "command": "forge.newSession", "title": "Forge: New Session" },
-      { "command": "forge.ping", "title": "Forge: Ping (debug)" }
+      { "command": "harness.newSession", "title": "Harness: New Session" },
+      { "command": "harness.ping", "title": "Harness: Ping (debug)" }
     ],
     "configuration": {
       "properties": {
-        "forge.serviceKeyPath": { "type": "string", "default": "" },
-        "forge.deploymentId": { "type": "string", "default": "" },
-        "forge.resourceGroup": { "type": "string", "default": "default" },
-        "forge.apiVersion": { "type": "string", "default": "2024-10-21" },
-        "forge.model": { "type": "string", "default": "" },
-        "forge.approvalMode": { "type": "string", "enum": ["ask", "auto"], "default": "ask" },
-        "forge.contextBudget": { "type": "number", "default": 100000 }
+        "harness.serviceKeyPath": { "type": "string", "default": "" },
+        "harness.deploymentId": { "type": "string", "default": "" },
+        "harness.resourceGroup": { "type": "string", "default": "default" },
+        "harness.apiVersion": { "type": "string", "default": "2024-10-21" },
+        "harness.model": { "type": "string", "default": "" },
+        "harness.approvalMode": { "type": "string", "enum": ["ask", "auto"], "default": "ask" },
+        "harness.contextBudget": { "type": "number", "default": 100000 }
       }
     }
   },
@@ -178,7 +178,7 @@ Expected: no errors (no `.ts` files yet, so this is a no-op success — just con
 
 ```bash
 git add package.json tsconfig.json esbuild.mjs .gitignore media/icon.svg package-lock.json
-git commit -m "chore: scaffold Forge extension project"
+git commit -m "chore: scaffold Harness extension project"
 ```
 
 ---
@@ -432,12 +432,12 @@ import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse";
 import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from "./types";
 
 function loadServiceKey(keyPath: string): ServiceKey {
-  if (!keyPath) throw new Error("forge.serviceKeyPath is not set.");
+  if (!keyPath) throw new Error("harness.serviceKeyPath is not set.");
   return JSON.parse(fs.readFileSync(keyPath, "utf8"));
 }
 
 function readConfig() {
-  const cfg = vscode.workspace.getConfiguration("forge");
+  const cfg = vscode.workspace.getConfiguration("harness");
   return {
     serviceKeyPath: cfg.get<string>("serviceKeyPath", ""),
     deploymentId: cfg.get<string>("deploymentId", ""),
@@ -539,7 +539,7 @@ git commit -m "feat: SAP AI Core streaming chat client with retry/backoff"
 
 ---
 
-### Task 4: `extension.ts` activation + `forge.ping` (M0 checkpoint)
+### Task 4: `extension.ts` activation + `harness.ping` (M0 checkpoint)
 
 **Files:**
 - Create: `src/extension.ts`
@@ -554,11 +554,11 @@ import * as vscode from "vscode";
 import { chat } from "./aicore/client";
 
 export function activate(context: vscode.ExtensionContext) {
-  const output = vscode.window.createOutputChannel("Forge");
+  const output = vscode.window.createOutputChannel("Harness");
   context.subscriptions.push(output);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("forge.ping", async () => {
+    vscode.commands.registerCommand("harness.ping", async () => {
       output.show(true);
       output.appendLine("Sending: say hello");
       try {
@@ -586,18 +586,18 @@ Expected: `dist/extension.js` produced, no esbuild errors.
 
 - [ ] **Step 3: Manual verification (M0 checkpoint)**
 
-1. Set `forge.serviceKeyPath`, `forge.deploymentId`, `forge.resourceGroup` in workspace settings, pointing at a real SAP AI Core deployment's service key.
+1. Set `harness.serviceKeyPath`, `harness.deploymentId`, `harness.resourceGroup` in workspace settings, pointing at a real SAP AI Core deployment's service key.
 2. Press `F5` to launch the Extension Development Host.
-3. Run command palette → "Forge: Ping (debug)".
-4. Expected: the "Forge" output channel shows the streamed reply appearing incrementally (not all at once), followed by a `[done]` line.
-5. Temporarily rename `forge.serviceKeyPath` to an invalid path, re-run — expected: `[error] forge.serviceKeyPath is not set.` (or ENOENT) surfaces in the channel without crashing the extension host.
+3. Run command palette → "Harness: Ping (debug)".
+4. Expected: the "Harness" output channel shows the streamed reply appearing incrementally (not all at once), followed by a `[done]` line.
+5. Temporarily rename `harness.serviceKeyPath` to an invalid path, re-run — expected: `[error] harness.serviceKeyPath is not set.` (or ENOENT) surfaces in the channel without crashing the extension host.
 6. Do not proceed to Task 5 until streaming and the error path both work against a real deployment.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add src/extension.ts
-git commit -m "feat: activation with forge.ping debug command (M0 checkpoint)"
+git commit -m "feat: activation with harness.ping debug command (M0 checkpoint)"
 ```
 
 ---
@@ -833,7 +833,7 @@ import { formatFileContent } from "./readFile";
 let dir: string;
 
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-test-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-test-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -941,7 +941,7 @@ import ignore from "ignore";
 import { registerTool, resolveWithinRoot, getWorkspaceRoot, type ToolContext } from "./index";
 import type { ToolSchema } from "../aicore/types";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".forge"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
 const MAX_ENTRIES = 500;
 
 function loadIgnorer(root: string) {
@@ -1068,7 +1068,7 @@ import ignore from "ignore";
 import { registerTool, resolveWithinRoot, type ToolContext } from "./index";
 import type { ToolSchema } from "../aicore/types";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".forge"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
 const MAX_FILE_BYTES = 1_000_000;
 
 export function searchInText(content: string, pattern: RegExp, filePath: string, maxResults: number): string[] {
@@ -1384,7 +1384,7 @@ git commit -m "feat: search_replace tool with exact-match semantics (diffTracker
 
 **Files:**
 - Create: `src/agent/systemPrompt.ts`, `src/agent/loop.ts`
-- Modify: `src/extension.ts` (add temporary `forge.runTurn` dev command)
+- Modify: `src/extension.ts` (add temporary `harness.runTurn` dev command)
 
 **Interfaces:**
 - Consumes: `Session` (Task 5), `estimateTokens` (Task 5), `chat` (Task 3), `getToolSchemas`, `runTool`, `truncate`, `getWorkspaceRoot` (Task 6).
@@ -1406,7 +1406,7 @@ export function systemMessage(session: Session): Message {
   const date = new Date().toISOString().slice(0, 10);
   const agentsMd = loadAgentsMd(workspaceRoot);
 
-  const content = `You are Forge, a coding agent running inside VS Code. You are precise, safe, and
+  const content = `You are Harness, a coding agent running inside VS Code. You are precise, safe, and
 helpful. You complete tasks autonomously using your tools and only yield back to
 the user when the task is resolved or you are blocked on their input.
 
@@ -1480,7 +1480,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     for (let step = 0; step < MAX_STEPS; step++) {
       if (signal.aborted) return;
 
-      const cfg = require("vscode").workspace.getConfiguration("forge");
+      const cfg = require("vscode").workspace.getConfiguration("harness");
       const budget = cfg.get<number>("contextBudget", 100_000);
       if (estimateTokens(session.messages) > budget * 0.75) {
         await compact(session);
@@ -1537,7 +1537,7 @@ export function appendToStore(_session: Session, _message: Message): void {}
 - [ ] **Step 3: Add a temporary dev command to `src/extension.ts`**
 
 ```ts
-// add inside activate(), alongside forge.ping
+// add inside activate(), alongside harness.ping
 import { runTurn } from "./agent/loop";
 import { createSession } from "./state/session";
 import "./tools/readFile";
@@ -1546,8 +1546,8 @@ import "./tools/grep";
 import "./tools/searchReplace";
 
 context.subscriptions.push(
-  vscode.commands.registerCommand("forge.runTurn", async () => {
-    const text = await vscode.window.showInputBox({ prompt: "Forge task" });
+  vscode.commands.registerCommand("harness.runTurn", async () => {
+    const text = await vscode.window.showInputBox({ prompt: "Harness task" });
     if (!text) return;
     output.show(true);
     const session = createSession(text, "debug");
@@ -1570,7 +1570,7 @@ context.subscriptions.push(
 );
 ```
 
-Also register the command in `package.json`'s `contributes.commands`: `{ "command": "forge.runTurn", "title": "Forge: Run Turn (debug)" }`.
+Also register the command in `package.json`'s `contributes.commands`: `{ "command": "harness.runTurn", "title": "Harness: Run Turn (debug)" }`.
 
 - [ ] **Step 4: Typecheck and build**
 
@@ -1580,7 +1580,7 @@ Expected: no errors.
 - [ ] **Step 5: Manual verification (M1 checkpoint)**
 
 1. `F5` to launch the Extension Development Host on a real multi-file repo.
-2. Run "Forge: Run Turn (debug)", enter: `find where X is defined and rename it to Y across the repo` (substitute a real symbol from the test repo).
+2. Run "Harness: Run Turn (debug)", enter: `find where X is defined and rename it to Y across the repo` (substitute a real symbol from the test repo).
 3. Expected: the output channel shows the model using `grep`/`list_dir`/`read_file` tool calls (visible as raw tool_call JSON in this debug harness — that's fine, the real UI comes in M2), then `search_replace` edits landing in the actual files, then a final text answer.
 4. Open one of the edited files — the change should be present and the file should already be saved (search_replace calls `doc.save()`).
 5. Try asking something that requires a bash command (e.g. "run the tests") — expected: nothing happens yet, since `bash` isn't registered until Task 10; the model's tool call should come back as `Unknown tool: bash` and the model should say it can't run commands. This confirms `runTool`'s unknown-tool path works.
@@ -1725,7 +1725,7 @@ registerTool("bash", {
     const timeoutMs = Math.min(300_000, args.timeout_ms ?? 60_000);
 
     const vscode = require("vscode");
-    const approvalMode = vscode.workspace.getConfiguration("forge").get<string>("approvalMode", "ask");
+    const approvalMode = vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask");
 
     const autoOk = approvalMode === "auto" && isAutoApproved(command) && !isNeverAutoApproved(command);
     if (!autoOk) {
@@ -1773,9 +1773,9 @@ Expected: `# pass 6`
 // src/agent/loop.ts — add at top:
 import * as vscode from "vscode";
 // and replace:
-//   const cfg = require("vscode").workspace.getConfiguration("forge");
+//   const cfg = require("vscode").workspace.getConfiguration("harness");
 // with:
-const cfg = vscode.workspace.getConfiguration("forge");
+const cfg = vscode.workspace.getConfiguration("harness");
 ```
 
 Also update the `ToolContext` object built inside `runTurn` to include `requestApproval: ui.requestApproval`.
@@ -1818,7 +1818,7 @@ git commit -m "feat: bash tool with two-mode approval gate"
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}} 'nonce-{{nonce}}'; img-src {{cspSource}} data:;" />
 <link rel="stylesheet" href="{{styleUri}}" />
-<title>Forge</title>
+<title>Harness</title>
 </head>
 <body>
   <div id="header">
@@ -1830,7 +1830,7 @@ git commit -m "feat: bash tool with two-mode approval gate"
   <div id="messages"></div>
   <div id="touchedFiles"></div>
   <div id="inputBar">
-    <textarea id="input" placeholder="Ask Forge..."></textarea>
+    <textarea id="input" placeholder="Ask Harness..."></textarea>
     <button id="sendBtn">Send</button>
   </div>
   <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
@@ -2074,11 +2074,11 @@ git commit -m "feat: vanilla webview markup, CSS, and message renderer"
 
 **Files:**
 - Create: `src/ui/panel.ts`
-- Modify: `src/extension.ts` (remove temporary `forge.runTurn` command, register the webview view provider)
+- Modify: `src/extension.ts` (remove temporary `harness.runTurn` command, register the webview view provider)
 
 **Interfaces:**
 - Consumes: `runTurn`, `UiPort` (Task 9); `createSession` (Task 5); webview message shapes (Task 11).
-- Produces: `ForgePanel` (implements `vscode.WebviewViewProvider`), registered against view id `forge.chat`.
+- Produces: `HarnessPanel` (implements `vscode.WebviewViewProvider`), registered against view id `harness.chat`.
 
 - [ ] **Step 1: Write `src/ui/panel.ts`**
 
@@ -2094,7 +2094,7 @@ interface PendingApproval {
   resolve: (approved: boolean) => void;
 }
 
-export class ForgePanel implements vscode.WebviewViewProvider {
+export class HarnessPanel implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private session: Session;
   private streamingText = "";
@@ -2137,7 +2137,7 @@ export class ForgePanel implements vscode.WebviewViewProvider {
       pendingApproval: this.pendingApproval ? { id: this.pendingApproval.id, command: this.pendingApproval.command } : null,
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
-      approvalMode: vscode.workspace.getConfiguration("forge").get<string>("approvalMode", "ask"),
+      approvalMode: vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask"),
     });
   }
 
@@ -2167,17 +2167,17 @@ export class ForgePanel implements vscode.WebviewViewProvider {
         this.postState();
         break;
       case "toggleApprovalMode": {
-        const cfg = vscode.workspace.getConfiguration("forge");
+        const cfg = vscode.workspace.getConfiguration("harness");
         const current = cfg.get<string>("approvalMode", "ask");
         await cfg.update("approvalMode", current === "ask" ? "auto" : "ask", vscode.ConfigurationTarget.Workspace);
         this.postState();
         break;
       }
       case "openDiff":
-        vscode.commands.executeCommand("forge.openDiff", msg.file);
+        vscode.commands.executeCommand("harness.openDiff", msg.file);
         break;
       case "revertFile":
-        vscode.commands.executeCommand("forge.revertFile", msg.file);
+        vscode.commands.executeCommand("harness.revertFile", msg.file);
         break;
     }
   }
@@ -2203,7 +2203,7 @@ export class ForgePanel implements vscode.WebviewViewProvider {
         this.postState();
       },
       showError: (message) => {
-        vscode.window.showErrorMessage(`Forge: ${message}`);
+        vscode.window.showErrorMessage(`Harness: ${message}`);
       },
     };
 
@@ -2221,7 +2221,7 @@ export class ForgePanel implements vscode.WebviewViewProvider {
 ```ts
 import * as vscode from "vscode";
 import { chat } from "./aicore/client";
-import { ForgePanel } from "./ui/panel";
+import { HarnessPanel } from "./ui/panel";
 import "./tools/readFile";
 import "./tools/listDir";
 import "./tools/grep";
@@ -2229,11 +2229,11 @@ import "./tools/searchReplace";
 import "./tools/bash";
 
 export function activate(context: vscode.ExtensionContext) {
-  const output = vscode.window.createOutputChannel("Forge");
+  const output = vscode.window.createOutputChannel("Harness");
   context.subscriptions.push(output);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("forge.ping", async () => {
+    vscode.commands.registerCommand("harness.ping", async () => {
       output.show(true);
       output.appendLine("Sending: say hello");
       try {
@@ -2246,12 +2246,12 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  const panel = new ForgePanel(context.extensionUri);
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider("forge.chat", panel));
+  const panel = new HarnessPanel(context.extensionUri);
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider("harness.chat", panel));
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("forge.newSession", () => {
-      vscode.commands.executeCommand("workbench.view.extension.forge");
+    vscode.commands.registerCommand("harness.newSession", () => {
+      vscode.commands.executeCommand("workbench.view.extension.harness");
     }),
   );
 }
@@ -2278,9 +2278,9 @@ Expected: no errors; `dist/webview/{index.html,style.css,main.js}` exist.
 
 - [ ] **Step 5: Manual verification (M2 checkpoint, spec §12 acceptance tests 1–3)**
 
-1. `F5` to launch the Extension Development Host. Open the Forge icon in the activity bar — the chat view should render with header, empty message list, and input box.
+1. `F5` to launch the Extension Development Host. Open the Harness icon in the activity bar — the chat view should render with header, empty message list, and input box.
 2. **Acceptance test 1**: Type "What does this repo do?" and send. Expected: streamed assistant text appears live; tool calls render as collapsed `▸ list_dir ...` / `▸ read_file ...` lines that expand on click; no approval prompts appear (read-only tools never gate); final answer is concise.
-3. **Acceptance test 3**: Ask something requiring a command, e.g. "run the tests," with `forge.approvalMode` = `ask`. Expected: an inline approval card appears with the exact command and Approve/Deny buttons. Click Deny — expected: the transcript shows `User denied this command.` as the tool result, and the model reacts (re-plans or asks the user) without the extension crashing. Re-ask and click Approve — expected: command output appears (or `[truncated]` markers if very long).
+3. **Acceptance test 3**: Ask something requiring a command, e.g. "run the tests," with `harness.approvalMode` = `ask`. Expected: an inline approval card appears with the exact command and Approve/Deny buttons. Click Deny — expected: the transcript shows `User denied this command.` as the tool result, and the model reacts (re-plans or asks the user) without the extension crashing. Re-ask and click Approve — expected: command output appears (or `[truncated]` markers if very long).
 4. Click Stop mid-turn on a long-running request — expected: the turn ends promptly, the Stop button disables, and a subsequent message still works (session isn't corrupted).
 5. Do not proceed to Task 13 until steps 2–4 all pass in the real UI.
 
@@ -2293,14 +2293,14 @@ git commit -m "feat: webview chat panel with approvals and stop (M2 checkpoint)"
 
 ---
 
-### Task 13: `state/diffTracker.ts` (real implementation) + `forge-before` content provider
+### Task 13: `state/diffTracker.ts` (real implementation) + `harness-before` content provider
 
 **Files:**
 - Modify: `src/state/diffTracker.ts` (replace the Task 8 stub), `src/tools/searchReplace.ts` (call `beginTurn`/real `snapshot`), `src/tools/bash.ts` (record touched files via `git diff --name-only` fallback), `src/agent/loop.ts` (call `diffTracker.beginTurn()`/`endTurn()` and `ui.showTurnDiff`)
 - Create: `src/state/diffTracker.test.ts`
 
 **Interfaces:**
-- Produces: `diffTracker.beginTurn(): void`; `diffTracker.snapshot(filePath: string, contentBefore: string | null): void`; `diffTracker.endTurn(): string[]`; `diffTracker.getSnapshot(filePath: string): string | null | undefined` (undefined = never snapshotted, null = file was newly created); registers `forge-before` as a `vscode.TextDocumentContentProvider`.
+- Produces: `diffTracker.beginTurn(): void`; `diffTracker.snapshot(filePath: string, contentBefore: string | null): void`; `diffTracker.endTurn(): string[]`; `diffTracker.getSnapshot(filePath: string): string | null | undefined` (undefined = never snapshotted, null = file was newly created); registers `harness-before` as a `vscode.TextDocumentContentProvider`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2409,7 +2409,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     for (let step = 0; step < MAX_STEPS; step++) {
       if (signal.aborted) return;
 
-      const cfg = vscode.workspace.getConfiguration("forge");
+      const cfg = vscode.workspace.getConfiguration("harness");
       const budget = cfg.get<number>("contextBudget", 100_000);
       if (estimateTokens(session.messages) > budget * 0.75) {
         await compact(session);
@@ -2479,7 +2479,7 @@ function recordGitTouchedFiles(workspaceRoot: string) {
 
 Call `recordGitTouchedFiles(ctx.workspaceRoot)` right before each `resolve(...)` call in `bash.ts`'s promise executor. Note: passing `undefined` into `snapshot`'s `contentBefore: string | null` param is a deliberate widening for this "touched but no exact snapshot" case — update `DiffTracker`'s type to `snapshot(filePath: string, contentBefore: string | null | undefined): void` and treat `undefined` in the diff-view command (Task 14) as "show `git diff` for this file instead of the exact before/after".
 
-- [ ] **Step 8: Write the `forge-before` `TextDocumentContentProvider`**
+- [ ] **Step 8: Write the `harness-before` `TextDocumentContentProvider`**
 
 ```ts
 // add to src/state/diffTracker.ts
@@ -2512,11 +2512,11 @@ git commit -m "feat: real diff tracking (search_replace snapshots + bash git-dif
 ### Task 14: Touched-files bar wiring — diff view command + revert command
 
 **Files:**
-- Modify: `src/extension.ts` (register `forge.openDiff`, `forge.revertFile`, the `forge-before` provider)
+- Modify: `src/extension.ts` (register `harness.openDiff`, `harness.revertFile`, the `harness-before` provider)
 
 **Interfaces:**
 - Consumes: `BeforeContentProvider`, `diffTracker` (Task 13).
-- Produces: commands `forge.openDiff` (file: string), `forge.revertFile` (file: string) invoked from the webview via `ui/panel.ts`'s `openDiff`/`revertFile` message handlers (already wired in Task 12).
+- Produces: commands `harness.openDiff` (file: string), `harness.revertFile` (file: string) invoked from the webview via `ui/panel.ts`'s `openDiff`/`revertFile` message handlers (already wired in Task 12).
 
 - [ ] **Step 1: Register the provider and commands in `src/extension.ts`**
 
@@ -2527,26 +2527,26 @@ import * as fs from "node:fs";
 
 // inside activate():
 const beforeProvider = new BeforeContentProvider(diffTracker);
-context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider("forge-before", beforeProvider));
+context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider("harness-before", beforeProvider));
 
 context.subscriptions.push(
-  vscode.commands.registerCommand("forge.openDiff", async (file: string) => {
+  vscode.commands.registerCommand("harness.openDiff", async (file: string) => {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!root) return;
     const before = diffTracker.getSnapshot(file);
     if (before === undefined) {
-      vscode.window.showInformationMessage(`Forge: ${file} was changed by a shell command — showing git diff instead.`);
+      vscode.window.showInformationMessage(`Harness: ${file} was changed by a shell command — showing git diff instead.`);
       await vscode.commands.executeCommand("git.openChange", vscode.Uri.file(path.join(root, file)));
       return;
     }
-    const beforeUri = vscode.Uri.parse(`forge-before:${encodeURIComponent(file)}`);
+    const beforeUri = vscode.Uri.parse(`harness-before:${encodeURIComponent(file)}`);
     const afterUri = vscode.Uri.file(path.join(root, file));
-    await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, `Forge: ${file} (this turn)`);
+    await vscode.commands.executeCommand("vscode.diff", beforeUri, afterUri, `Harness: ${file} (this turn)`);
   }),
 );
 
 context.subscriptions.push(
-  vscode.commands.registerCommand("forge.revertFile", async (file: string) => {
+  vscode.commands.registerCommand("harness.revertFile", async (file: string) => {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!root) return;
     const before = diffTracker.getSnapshot(file);
@@ -2560,7 +2560,7 @@ context.subscriptions.push(
       const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
       edit.replace(uri, fullRange, before);
     } else {
-      vscode.window.showWarningMessage(`Forge: no exact snapshot for ${file} (changed by a shell command) — cannot auto-revert.`);
+      vscode.window.showWarningMessage(`Harness: no exact snapshot for ${file} (changed by a shell command) — cannot auto-revert.`);
       return;
     }
     await vscode.workspace.applyEdit(edit);
@@ -2601,7 +2601,7 @@ Expected: no errors.
 
 1. `F5`. Ask: "Rename function A to B everywhere" against a real multi-file repo with a real function to rename.
 2. Expected: agent greps for usages, edits multiple files via `search_replace`, and the touched-files bar lists every changed file after the turn.
-3. Click a filename — expected: `vscode.diff` opens showing before/after correctly (before = original content via `forge-before:`, after = the live file).
+3. Click a filename — expected: `vscode.diff` opens showing before/after correctly (before = original content via `harness-before:`, after = the live file).
 4. Click "revert" on one file — expected: that file's content is restored to pre-turn state and the change is visible in the editor; other touched files are unaffected.
 5. Do not proceed until diff view and revert both work correctly on real edits.
 
@@ -2637,7 +2637,7 @@ import { createSession } from "./session";
 
 let dir: string;
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-store-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-store-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -2656,7 +2656,7 @@ test("appendToStore creates the file with a meta line then appends messages", ()
   assert.equal(lines[2].role, "assistant");
 });
 
-test("listSessions finds sessions under .forge/sessions and reads their titles", () => {
+test("listSessions finds sessions under .harness/sessions and reads their titles", () => {
   const session = createSession("second session", "gpt-4o");
   session.filePath = newSessionFilePath(dir, session);
   appendToStore(session, { role: "user", content: "second session" });
@@ -2691,7 +2691,7 @@ import type { Session } from "./session";
 import type { Message } from "../aicore/types";
 
 function sessionsDir(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ".forge", "sessions");
+  return path.join(workspaceRoot, ".harness", "sessions");
 }
 
 export function newSessionFilePath(workspaceRoot: string, session: Session): string {
@@ -2744,7 +2744,7 @@ Expected: `# pass 3`
 - [ ] **Step 5: Assign `filePath` when creating a session, in `ui/panel.ts`**
 
 ```ts
-// in ForgePanel, wherever `createSession(...)` is called (constructor and "newSession" handler),
+// in HarnessPanel, wherever `createSession(...)` is called (constructor and "newSession" handler),
 // immediately follow it with:
 this.session.filePath = newSessionFilePath(getWorkspaceRoot(), this.session);
 ```
@@ -2760,7 +2760,7 @@ Expected: no errors.
 
 ```bash
 git add src/state/store.ts src/state/store.test.ts src/ui/panel.ts
-git commit -m "feat: JSONL session persistence under .forge/sessions"
+git commit -m "feat: JSONL session persistence under .harness/sessions"
 ```
 
 ---
@@ -2773,7 +2773,7 @@ git commit -m "feat: JSONL session persistence under .forge/sessions"
 **Interfaces:**
 - Consumes: `listSessions`, `loadSession` (Task 15).
 
-- [ ] **Step 1: Update `ForgePanel` in `src/ui/panel.ts`**
+- [ ] **Step 1: Update `HarnessPanel` in `src/ui/panel.ts`**
 
 ```ts
 // add imports
@@ -2848,10 +2848,10 @@ Expected: no errors.
 - [ ] **Step 4: Manual verification (M3 checkpoint, spec §12 acceptance test 6)**
 
 1. `F5`. Have one full conversation turn, then close the Extension Development Host window entirely (not just reload).
-2. Re-launch (`F5` again, or reopen the workspace in the dev host). Open Forge — expected: the session dropdown lists the prior session by its first-message title.
+2. Re-launch (`F5` again, or reopen the workspace in the dev host). Open Harness — expected: the session dropdown lists the prior session by its first-message title.
 3. Select it — expected: the full prior transcript renders read-only-looking but is actually loaded as the active session (per spec §8, "Continue this session" — for v1 simplicity, selecting IS continuing, since there's only one webview and one active session at a time).
 4. Send a new message in the continued session — expected: it appends correctly and the turn completes.
-5. Inspect `.forge/sessions/*.jsonl` on disk — expected: valid JSONL, one meta line + one line per message, human-readable.
+5. Inspect `.harness/sessions/*.jsonl` on disk — expected: valid JSONL, one meta line + one line per message, human-readable.
 
 - [ ] **Step 5: Commit**
 
@@ -2913,7 +2913,7 @@ test("compact appends a compaction marker line to the session's JSONL file", asy
   const fs = await import("node:fs");
   const os = await import("node:os");
   const path = await import("node:path");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-compact-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-compact-"));
   const filePath = path.join(dir, "s.jsonl");
   fs.writeFileSync(filePath, JSON.stringify({ type: "meta", title: "t" }) + "\n");
 
@@ -2985,7 +2985,7 @@ Expected: no errors (confirms `agent/loop.ts`'s `await compact(session)` call �
 
 - [ ] **Step 6: Manual verification (spec §12 acceptance test 5)**
 
-1. Set `forge.contextBudget` to `2000` in workspace settings.
+1. Set `harness.contextBudget` to `2000` in workspace settings.
 2. `F5`. Have a multi-turn conversation that involves a few tool calls (enough to exceed ~1500 estimated tokens).
 3. Expected: at some point mid-turn, the transcript visibly resets to a short summary message before the next assistant reply — the conversation should still continue coherently (the model should still know what it was doing).
 4. Inspect the session's `.jsonl` file on disk — expected: it still contains every original message plus a `{"type":"compaction"}` marker line; nothing was deleted from disk, only from the in-memory/live context.
@@ -3020,7 +3020,7 @@ import * as path from "node:path";
 import { loadAgentsMd } from "./agentsMd";
 
 let dir: string;
-before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-agentsmd-")); });
+before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-agentsmd-")); });
 after(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
 test("returns empty string when neither file exists", () => {
@@ -3035,7 +3035,7 @@ test("reads AGENTS.md and wraps it under the heading", () => {
 });
 
 test("falls back to CLAUDE.md when AGENTS.md is absent", () => {
-  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "forge-agentsmd2-"));
+  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "harness-agentsmd2-"));
   fs.writeFileSync(path.join(dir2, "CLAUDE.md"), "Prefer functional style.");
   const out = loadAgentsMd(dir2);
   assert.match(out, /Prefer functional style\./);
@@ -3150,7 +3150,7 @@ Expected: no errors, `dist/extension.js` and `dist/webview/*` present.
 2. "Rename function A to B everywhere" → multi-file search_replace edits, touched-files bar accurate, diff view correct, revert restores one file. *(re-verify from Task 14)*
 3. "Run the tests" in `ask` mode → approval prompt, Deny handled gracefully, Approve captures/truncates output. *(re-verify from Task 12)*
 4. Kill network mid-turn → error toast, session intact, next message works. *(re-verify from Task 19)*
-5. `forge.contextBudget` = 2000 → compaction fires, session stays coherent, JSONL retains full history. *(re-verify from Task 17)*
+5. `harness.contextBudget` = 2000 → compaction fires, session stays coherent, JSONL retains full history. *(re-verify from Task 17)*
 6. Reload the VS Code window → previous session in dropdown, continuable. *(re-verify from Task 16)*
 7. Edit a file outside the workspace (`../foo`) → tool refuses. *(re-verify from Task 19)*
 
@@ -3162,12 +3162,12 @@ Expected: all 7 pass without code changes. If any fail, fix the responsible task
 npx vsce package
 ```
 
-Expected: a `forge-0.0.1.vsix` file is produced with no errors (vsce may warn about a missing `LICENSE`/`repository` field — acceptable for internal use, not a blocker).
+Expected: a `harness-0.0.1.vsix` file is produced with no errors (vsce may warn about a missing `LICENSE`/`repository` field — acceptable for internal use, not a blocker).
 
 - [ ] **Step 5: Install and smoke-test from the packaged VSIX**
 
-1. In VS Code: Extensions view → "..." menu → "Install from VSIX..." → select `forge-0.0.1.vsix`.
-2. Reload VS Code, open a real workspace, configure `forge.*` settings, run acceptance test 1 again from the installed (non-dev-host) extension.
+1. In VS Code: Extensions view → "..." menu → "Install from VSIX..." → select `harness-0.0.1.vsix`.
+2. Reload VS Code, open a real workspace, configure `harness.*` settings, run acceptance test 1 again from the installed (non-dev-host) extension.
 3. Expected: identical behavior to the dev host.
 
 - [ ] **Step 6: Commit**
