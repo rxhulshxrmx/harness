@@ -3,7 +3,7 @@
   "displayName": "Harness",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "internal",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "icon": "media/icon.png",
   "repository": {
@@ -37,7 +37,7 @@
         {
           "type": "webview",
           "id": "harness.chat",
-          "name": ""
+          "name": " "
         }
       ]
     },
