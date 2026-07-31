@@ -2,6 +2,7 @@
 src/**
 docs/**
 .superpowers/**
+.harness/**
 node_modules/**
 dist-check/**
 *.test.ts
