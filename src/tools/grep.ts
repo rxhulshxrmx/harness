@@ -4,7 +4,7 @@ import ignore from "ignore";
 import { registerTool, resolveWithinRoot, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".forge"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
 const MAX_FILE_BYTES = 1_000_000;
 
 export function searchInText(content: string, pattern: RegExp, filePath: string, maxResults: number): string[] {

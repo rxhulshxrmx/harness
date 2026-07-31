@@ -24,7 +24,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     for (let step = 0; step < MAX_STEPS; step++) {
       if (signal.aborted) return;
 
-      const cfg = vscode.workspace.getConfiguration("forge");
+      const cfg = vscode.workspace.getConfiguration("harness");
       const budget = cfg.get<number>("contextBudget", 100_000);
       if (estimateTokens(session.messages) > budget * 0.75) {
         await compact(session);

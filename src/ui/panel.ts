@@ -10,7 +10,7 @@ interface PendingApproval {
   resolve: (approved: boolean) => void;
 }
 
-export class ForgePanel implements vscode.WebviewViewProvider {
+export class HarnessPanel implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private session: Session;
   private streamingText = "";
@@ -53,7 +53,7 @@ export class ForgePanel implements vscode.WebviewViewProvider {
       pendingApproval: this.pendingApproval ? { id: this.pendingApproval.id, command: this.pendingApproval.command } : null,
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
-      approvalMode: vscode.workspace.getConfiguration("forge").get<string>("approvalMode", "ask"),
+      approvalMode: vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask"),
     });
   }
 
@@ -93,19 +93,19 @@ export class ForgePanel implements vscode.WebviewViewProvider {
         this.postState();
         break;
       case "toggleApprovalMode": {
-        const cfg = vscode.workspace.getConfiguration("forge");
+        const cfg = vscode.workspace.getConfiguration("harness");
         const current = cfg.get<string>("approvalMode", "ask");
         await cfg.update("approvalMode", current === "ask" ? "auto" : "ask", vscode.ConfigurationTarget.Workspace);
         this.postState();
         break;
       }
       case "openDiff":
-        // forge.openDiff is registered in Task 14; calling it before that is a silent no-op.
-        vscode.commands.executeCommand("forge.openDiff", msg.file);
+        // harness.openDiff is registered in Task 14; calling it before that is a silent no-op.
+        vscode.commands.executeCommand("harness.openDiff", msg.file);
         break;
       case "revertFile":
-        // forge.revertFile is registered in Task 14; calling it before that is a silent no-op.
-        vscode.commands.executeCommand("forge.revertFile", msg.file);
+        // harness.revertFile is registered in Task 14; calling it before that is a silent no-op.
+        vscode.commands.executeCommand("harness.revertFile", msg.file);
         break;
     }
   }
@@ -131,7 +131,7 @@ export class ForgePanel implements vscode.WebviewViewProvider {
         this.postState();
       },
       showError: (message) => {
-        vscode.window.showErrorMessage(`Forge: ${message}`);
+        vscode.window.showErrorMessage(`Harness: ${message}`);
       },
     };
 

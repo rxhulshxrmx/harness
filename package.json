@@ -1,6 +1,6 @@
 {
-  "name": "forge",
-  "displayName": "Forge",
+  "name": "harness",
+  "displayName": "Harness",
   "publisher": "internal",
   "version": "0.0.1",
   "private": true,
@@ -20,54 +20,54 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "forge",
-          "title": "Forge",
+          "id": "harness",
+          "title": "Harness",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "forge": [
+      "harness": [
         {
           "type": "webview",
-          "id": "forge.chat",
+          "id": "harness.chat",
           "name": "Chat"
         }
       ]
     },
     "commands": [
       {
-        "command": "forge.newSession",
-        "title": "Forge: New Session"
+        "command": "harness.newSession",
+        "title": "Harness: New Session"
       },
       {
-        "command": "forge.ping",
-        "title": "Forge: Ping (debug)"
+        "command": "harness.ping",
+        "title": "Harness: Ping (debug)"
       }
     ],
     "configuration": {
       "properties": {
-        "forge.serviceKeyPath": {
+        "harness.serviceKeyPath": {
           "type": "string",
           "default": ""
         },
-        "forge.deploymentId": {
+        "harness.deploymentId": {
           "type": "string",
           "default": ""
         },
-        "forge.resourceGroup": {
+        "harness.resourceGroup": {
           "type": "string",
           "default": "default"
         },
-        "forge.apiVersion": {
+        "harness.apiVersion": {
           "type": "string",
           "default": "2024-10-21"
         },
-        "forge.model": {
+        "harness.model": {
           "type": "string",
           "default": ""
         },
-        "forge.approvalMode": {
+        "harness.approvalMode": {
           "type": "string",
           "enum": [
             "ask",
@@ -75,7 +75,7 @@
           ],
           "default": "ask"
         },
-        "forge.contextBudget": {
+        "harness.contextBudget": {
           "type": "number",
           "default": 100000
         }

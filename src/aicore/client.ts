@@ -7,13 +7,13 @@ import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from
 declare function require(id: "vscode"): typeof vscodeTypes;
 
 function loadServiceKey(keyPath: string): ServiceKey {
-  if (!keyPath) throw new Error("forge.serviceKeyPath is not set.");
+  if (!keyPath) throw new Error("harness.serviceKeyPath is not set.");
   return JSON.parse(fs.readFileSync(keyPath, "utf8"));
 }
 
 function readConfig() {
   const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("forge");
+  const cfg = vscode.workspace.getConfiguration("harness");
   return {
     serviceKeyPath: cfg.get<string>("serviceKeyPath", ""),
     deploymentId: cfg.get<string>("deploymentId", ""),

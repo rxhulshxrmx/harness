@@ -8,7 +8,7 @@ import { formatFileContent } from "./readFile.ts";
 let dir: string;
 
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-test-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-test-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });

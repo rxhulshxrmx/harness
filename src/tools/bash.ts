@@ -76,7 +76,7 @@ registerTool("bash", {
     const timeoutMs = Math.min(300_000, args.timeout_ms ?? 60_000);
 
     const vscode = require("vscode");
-    const approvalMode = vscode.workspace.getConfiguration("forge").get<string>("approvalMode", "ask");
+    const approvalMode = vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask");
 
     const autoOk = approvalMode === "auto" && isAutoApproved(command) && !isNeverAutoApproved(command);
     if (!autoOk) {

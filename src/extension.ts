@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { chat } from "./aicore/client.ts";
-import { ForgePanel } from "./ui/panel.ts";
+import { HarnessPanel } from "./ui/panel.ts";
 import "./tools/readFile.ts";
 import "./tools/listDir.ts";
 import "./tools/grep.ts";
@@ -8,11 +8,11 @@ import "./tools/searchReplace.ts";
 import "./tools/bash.ts";
 
 export function activate(context: vscode.ExtensionContext) {
-  const output = vscode.window.createOutputChannel("Forge");
+  const output = vscode.window.createOutputChannel("Harness");
   context.subscriptions.push(output);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("forge.ping", async () => {
+    vscode.commands.registerCommand("harness.ping", async () => {
       output.show(true);
       output.appendLine("Sending: say hello");
       try {
@@ -25,12 +25,12 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  const panel = new ForgePanel(context.extensionUri);
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider("forge.chat", panel));
+  const panel = new HarnessPanel(context.extensionUri);
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider("harness.chat", panel));
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("forge.newSession", () => {
-      vscode.commands.executeCommand("workbench.view.extension.forge");
+    vscode.commands.registerCommand("harness.newSession", () => {
+      vscode.commands.executeCommand("workbench.view.extension.harness");
     }),
   );
 }

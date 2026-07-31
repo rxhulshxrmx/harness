@@ -4,7 +4,7 @@ import ignore from "ignore";
 import { registerTool, resolveWithinRoot, getWorkspaceRoot, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".forge"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
 const MAX_ENTRIES = 500;
 
 function loadIgnorer(root: string) {
