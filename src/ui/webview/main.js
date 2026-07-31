@@ -146,10 +146,16 @@ function render() {
   touchedEl.innerHTML = "";
   touchedEl.classList.toggle("visible", state.touchedFiles.length > 0);
   for (const file of state.touchedFiles) {
-    const span = document.createElement("span");
-    span.textContent = file;
-    span.addEventListener("click", () => vscode.postMessage({ type: "openDiff", file }));
-    touchedEl.appendChild(span);
+    const row = document.createElement("span");
+    const nameSpan = document.createElement("a");
+    nameSpan.textContent = file;
+    nameSpan.addEventListener("click", () => vscode.postMessage({ type: "openDiff", file }));
+    const revertBtn = document.createElement("button");
+    revertBtn.textContent = "revert";
+    revertBtn.addEventListener("click", () => vscode.postMessage({ type: "revertFile", file }));
+    row.appendChild(nameSpan);
+    row.appendChild(revertBtn);
+    touchedEl.appendChild(row);
   }
 
   const sel = el("sessionSelect");
