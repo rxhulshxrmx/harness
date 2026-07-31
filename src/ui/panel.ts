@@ -3,6 +3,8 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { runTurn, type UiPort } from "../agent/loop.ts";
 import { createSession, type Session } from "../state/session.ts";
+import { newSessionFilePath } from "../state/store.ts";
+import { getWorkspaceRoot } from "../tools/index.ts";
 
 interface PendingApproval {
   id: string;
@@ -21,6 +23,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.session = createSession("", "");
+    this.session.filePath = newSessionFilePath(getWorkspaceRoot(), this.session);
     this.sessionList = [{ id: this.session.id, title: "New Session" }];
   }
 
@@ -88,6 +91,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         break;
       case "newSession":
         this.session = createSession("", "");
+        this.session.filePath = newSessionFilePath(getWorkspaceRoot(), this.session);
         this.sessionList.push({ id: this.session.id, title: "New Session" });
         this.touchedFiles = [];
         this.postState();
