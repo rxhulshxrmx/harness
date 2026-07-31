@@ -11,6 +11,10 @@ body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size
 .tool-call.expanded .body { display: block; }
 .approval { border: 1px solid var(--vscode-inputValidation-warningBorder); padding: 8px; margin: 8px 0; }
 .approval button { margin-right: 6px; }
+.approval .reason { opacity: 0.8; font-size: 0.9em; margin: 4px 0; }
+.approval .severity { font-weight: bold; margin-right: 4px; }
+.approval .severity.caution { color: var(--vscode-editorWarning-foreground); }
+.approval .severity.dangerous { color: var(--vscode-editorError-foreground); }
 #touchedFiles { padding: 4px 8px; border-top: 1px solid var(--vscode-panel-border); font-size: 0.9em; display: none; }
 #touchedFiles.visible { display: block; }
 #touchedFiles span { cursor: pointer; text-decoration: underline; margin-right: 10px; }

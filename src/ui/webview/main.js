@@ -129,6 +129,18 @@ function render() {
     const label = document.createElement("div");
     label.textContent = `Run: ${state.pendingApproval.command}`;
     div.appendChild(label);
+    if (state.pendingApproval.reason) {
+      const reason = document.createElement("div");
+      reason.className = "reason";
+      if (state.pendingApproval.severity) {
+        const badge = document.createElement("span");
+        badge.className = `severity ${state.pendingApproval.severity}`;
+        badge.textContent = state.pendingApproval.severity === "dangerous" ? "⚠ dangerous" : "⚠ caution";
+        reason.appendChild(badge);
+      }
+      reason.appendChild(document.createTextNode(state.pendingApproval.reason));
+      div.appendChild(reason);
+    }
     const approveBtn = document.createElement("button");
     approveBtn.textContent = "Approve";
     approveBtn.addEventListener("click", () => vscode.postMessage({ type: "approve", id: state.pendingApproval.id }));

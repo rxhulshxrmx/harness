@@ -1,13 +1,22 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
+import ignore from "ignore";
 import type * as vscodeTypes from "vscode";
 import type { ToolSchema } from "../aicore/types.ts";
+import { redactSecrets } from "../security/redactSecrets.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
+
+export interface ApprovalRequest {
+  command: string;
+  reason: string;
+  severity?: "caution" | "dangerous";
+}
 
 export interface ToolContext {
   workspaceRoot: string;
   signal: AbortSignal;
-  requestApproval: (command: string) => Promise<boolean>;
+  requestApproval: (request: ApprovalRequest) => Promise<boolean>;
 }
 
 export interface ToolDefinition {
@@ -30,10 +39,32 @@ export async function runTool(name: string, argsJson: string, ctx: ToolContext):
   if (!def) return `Unknown tool: ${name}`;
   try {
     const result = await def.execute(argsJson, ctx);
-    return truncate(result);
+    return truncate(redactSecrets(result));
   } catch (err) {
     return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+// Shared .gitignore + .harnessignore loader used by any tool that walks or
+// gates access to workspace paths (list_dir, grep, read_file, search_replace).
+// .harnessignore lets a project exclude paths from agent tool access without
+// touching .gitignore (e.g. to keep secrets or generated files out of the
+// agent's reach even when they're tracked in git).
+export function loadWorkspaceIgnore(root: string): ReturnType<typeof ignore> {
+  const ig = ignore();
+  for (const file of [".gitignore", ".harnessignore"]) {
+    const filePath = path.join(root, file);
+    if (fs.existsSync(filePath)) {
+      ig.add(fs.readFileSync(filePath, "utf8"));
+    }
+  }
+  return ig;
+}
+
+export function isIgnoredPath(root: string, absPath: string): boolean {
+  const rel = path.relative(root, absPath);
+  if (!rel || rel.startsWith("..")) return false;
+  return loadWorkspaceIgnore(root).ignores(rel);
 }
 
 export function resolveWithinRoot(root: string, filePath: string): string {

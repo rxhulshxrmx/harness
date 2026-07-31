@@ -4,8 +4,18 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { formatFileContent } from "./readFile.ts";
+import { runTool, type ToolContext } from "./index.ts";
+import { isStale, clearTracked } from "../state/fileTracker.ts";
 
 let dir: string;
+
+function ctx(workspaceRoot: string): ToolContext {
+  return {
+    workspaceRoot,
+    signal: new AbortController().signal,
+    requestApproval: async () => true,
+  };
+}
 
 before(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-test-"));
@@ -37,4 +47,22 @@ test("formatFileContent reports binary files without reading them as text", () =
   fs.writeFileSync(file, Buffer.from([0, 1, 2, 0, 255, 254]));
   const out = formatFileContent(file, 1, 400);
   assert.match(out, /^\[binary file, \d+ bytes\]$/);
+});
+
+test("read_file refuses a path excluded by .harnessignore", async () => {
+  clearTracked();
+  fs.writeFileSync(path.join(dir, ".harnessignore"), "secrets.env\n");
+  fs.writeFileSync(path.join(dir, "secrets.env"), "TOKEN=abc");
+  const result = await runTool("read_file", JSON.stringify({ file_path: "secrets.env" }), ctx(dir));
+  assert.match(result, /excluded by \.gitignore\/\.harnessignore/);
+});
+
+test("read_file succeeds and records the read for stale-file tracking", async () => {
+  clearTracked();
+  const file = path.join(dir, "tracked.txt");
+  fs.writeFileSync(file, "hello");
+  assert.equal(isStale(file), true);
+  const result = await runTool("read_file", JSON.stringify({ file_path: "tracked.txt" }), ctx(dir));
+  assert.match(result, /hello/);
+  assert.equal(isStale(file), false);
 });

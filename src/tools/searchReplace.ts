@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type * as vscodeTypes from "vscode";
-import { registerTool, resolveWithinRoot, type ToolContext } from "./index.ts";
+import { registerTool, resolveWithinRoot, isIgnoredPath, type ToolContext } from "./index.ts";
 import { diffTracker } from "../state/diffTracker.ts";
+import { isStale, recordRead } from "../state/fileTracker.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
@@ -75,7 +76,7 @@ const schema: ToolSchema = {
   function: {
     name: "search_replace",
     description:
-      "Edit a file by exact string replacement. old_string must match the file exactly once (including whitespace). Use an empty old_string to create a new file. Set replace_all to replace every occurrence.",
+      "Edit a file by exact string replacement. old_string must match the file exactly once (including whitespace). Use an empty old_string to create a new file. Set replace_all to replace every occurrence. The file must have been read via read_file first, with no changes on disk since — re-read it if this errors as stale.",
     parameters: {
       type: "object",
       properties: {
@@ -95,8 +96,15 @@ registerTool("search_replace", {
     const vscode = require("vscode");
     const args = JSON.parse(argsJson);
     const abs = resolveWithinRoot(ctx.workspaceRoot, args.file_path);
+    if (isIgnoredPath(ctx.workspaceRoot, abs)) {
+      return `Error: path is excluded by .gitignore/.harnessignore (${args.file_path})`;
+    }
     const exists = fs.existsSync(abs);
     const current = exists ? fs.readFileSync(abs, "utf8") : null;
+
+    if (exists && isStale(abs)) {
+      return `Error: file changed on disk since it was last read — re-read it before editing (${args.file_path})`;
+    }
 
     const plan = planReplacement(current, args.old_string, args.new_string, !!args.replace_all);
     if (plan.kind === "error") return `Error: ${plan.error} (${args.file_path})`;
@@ -119,6 +127,7 @@ registerTool("search_replace", {
     await vscode.workspace.applyEdit(edit);
     const doc = await vscode.workspace.openTextDocument(uri);
     await doc.save();
+    recordRead(abs);
 
     if (plan.kind === "create") return `Created ${args.file_path}`;
     return `Updated ${args.file_path}:\n${contextSnippet(plan.content!, args.new_string)}`;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isAutoApproved, isNeverAutoApproved, hasShellMetacharacters } from "./bash.ts";
+import { classifyCommand, isAutoApproved, isNeverAutoApproved, hasShellMetacharacters } from "./commandPolicy.ts";
 
 test("read-only commands are auto-approved", () => {
   for (const cmd of ["git status", "git diff", "git log", "ls -la", "node --version", "npm ls"]) {
@@ -103,4 +103,65 @@ test("auto-approve prefixes require a word boundary, not just a text prefix matc
   assert.equal(isAutoApproved("npx tsc --noEmit"), true);
   assert.equal(isAutoApproved("pytest -k foo"), true);
   assert.equal(isAutoApproved("pytest"), true);
+});
+
+// --- classifyCommand rule table ---
+
+test("classifyCommand distinguishes plain git push from a force push", () => {
+  const plain = classifyCommand("git push origin main");
+  assert.equal(plain.decision, "confirm");
+  assert.equal(plain.severity, "caution");
+
+  for (const cmd of ["git push --force", "git push -f", "git push --force-with-lease origin main"]) {
+    const forced = classifyCommand(cmd);
+    assert.equal(forced.decision, "confirm", cmd);
+    assert.equal(forced.severity, "dangerous", cmd);
+  }
+});
+
+test("classifyCommand distinguishes rm -rf from a plain rm", () => {
+  const recursive = classifyCommand("rm -rf dist");
+  assert.equal(recursive.decision, "confirm");
+  assert.equal(recursive.severity, "dangerous");
+
+  const plain = classifyCommand("rm one-file.txt");
+  assert.equal(plain.decision, "confirm");
+  assert.equal(plain.severity, "caution");
+});
+
+test("classifyCommand marks git reset --hard and git clean as dangerous", () => {
+  assert.equal(classifyCommand("git reset --hard").severity, "dangerous");
+  assert.equal(classifyCommand("git clean -fd").severity, "dangerous");
+  assert.equal(classifyCommand("git clean -f").severity, "dangerous");
+});
+
+test("classifyCommand marks sudo/curl/wget/shutdown/reboot with reasons", () => {
+  assert.equal(classifyCommand("sudo ls").severity, "dangerous");
+  assert.equal(classifyCommand("curl http://example.com").severity, "caution");
+  assert.equal(classifyCommand("wget http://example.com").severity, "caution");
+  assert.equal(classifyCommand("shutdown now").severity, "dangerous");
+  assert.equal(classifyCommand("reboot").severity, "dangerous");
+});
+
+test("classifyCommand allows rule-table test/typecheck commands", () => {
+  assert.equal(classifyCommand("npm test").decision, "allow");
+  assert.equal(classifyCommand("npx tsc").decision, "allow");
+  assert.equal(classifyCommand("pytest").decision, "allow");
+});
+
+test("classifyCommand falls back to heuristics for commands with no matching rule", () => {
+  const result = classifyCommand("npm run build");
+  assert.equal(result.decision, "confirm");
+  assert.equal(result.severity, undefined);
+});
+
+test("classifyCommand never lets the rule table override the shell-metacharacter guard", () => {
+  const result = classifyCommand("npm test && rm -rf /");
+  assert.equal(result.decision, "confirm");
+});
+
+test("classifyCommand read-only fallback commands stay allowed with no severity", () => {
+  const result = classifyCommand("git status");
+  assert.equal(result.decision, "allow");
+  assert.equal(result.severity, undefined);
 });

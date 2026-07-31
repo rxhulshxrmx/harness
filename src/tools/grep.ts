@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import ignore from "ignore";
-import { registerTool, resolveWithinRoot, type ToolContext } from "./index.ts";
+import { registerTool, resolveWithinRoot, loadWorkspaceIgnore, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
@@ -36,7 +35,7 @@ const schema: ToolSchema = {
   type: "function",
   function: {
     name: "grep",
-    description: "Search file contents by regex across the workspace.",
+    description: "Search file contents by regex across the workspace, respecting .gitignore/.harnessignore.",
     parameters: {
       type: "object",
       properties: {
@@ -55,9 +54,7 @@ registerTool("grep", {
     const args = JSON.parse(argsJson);
     const maxResults = args.max_results ?? 100;
     const re = new RegExp(args.pattern);
-    const ig = ignore();
-    const gitignorePath = path.join(ctx.workspaceRoot, ".gitignore");
-    if (fs.existsSync(gitignorePath)) ig.add(fs.readFileSync(gitignorePath, "utf8"));
+    const ig = loadWorkspaceIgnore(ctx.workspaceRoot);
 
     const results: string[] = [];
 

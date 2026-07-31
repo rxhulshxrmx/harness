@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
-import { registerTool, resolveWithinRoot, type ToolContext } from "./index.ts";
+import { registerTool, resolveWithinRoot, isIgnoredPath, type ToolContext } from "./index.ts";
+import { recordRead } from "../state/fileTracker.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 function isBinary(buf: Buffer): boolean {
@@ -47,6 +48,11 @@ registerTool("read_file", {
   async execute(argsJson: string, ctx: ToolContext) {
     const args = JSON.parse(argsJson);
     const abs = resolveWithinRoot(ctx.workspaceRoot, args.file_path);
-    return formatFileContent(abs, args.offset ?? 1, args.limit ?? 400);
+    if (isIgnoredPath(ctx.workspaceRoot, abs)) {
+      return `Error: path is excluded by .gitignore/.harnessignore (${args.file_path})`;
+    }
+    const content = formatFileContent(abs, args.offset ?? 1, args.limit ?? 400);
+    recordRead(abs);
+    return content;
   },
 });

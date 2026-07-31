@@ -9,6 +9,8 @@ import { getWorkspaceRoot } from "../tools/index.ts";
 interface PendingApproval {
   id: string;
   command: string;
+  reason: string;
+  severity?: "caution" | "dangerous";
   resolve: (approved: boolean) => void;
 }
 
@@ -81,7 +83,14 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       session: this.session,
       streamingText: this.streamingText,
       streaming: this.controller !== null,
-      pendingApproval: this.pendingApproval ? { id: this.pendingApproval.id, command: this.pendingApproval.command } : null,
+      pendingApproval: this.pendingApproval
+        ? {
+            id: this.pendingApproval.id,
+            command: this.pendingApproval.command,
+            reason: this.pendingApproval.reason,
+            severity: this.pendingApproval.severity,
+          }
+        : null,
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
       approvalMode: vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask"),
@@ -168,9 +177,9 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         this.streamingText += delta;
         this.postState();
       },
-      requestApproval: (command) =>
+      requestApproval: ({ command, reason, severity }) =>
         new Promise<boolean>((resolve) => {
-          this.pendingApproval = { id: crypto.randomBytes(4).toString("hex"), command, resolve };
+          this.pendingApproval = { id: crypto.randomBytes(4).toString("hex"), command, reason, severity, resolve };
           this.postState();
         }),
       showTurnDiff: (files) => {

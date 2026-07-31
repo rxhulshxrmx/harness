@@ -1,20 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ignore from "ignore";
-import { registerTool, resolveWithinRoot, getWorkspaceRoot, type ToolContext } from "./index.ts";
+import { registerTool, resolveWithinRoot, getWorkspaceRoot, loadWorkspaceIgnore, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
 const MAX_ENTRIES = 500;
-
-function loadIgnorer(root: string) {
-  const ig = ignore();
-  const gitignorePath = path.join(root, ".gitignore");
-  if (fs.existsSync(gitignorePath)) {
-    ig.add(fs.readFileSync(gitignorePath, "utf8"));
-  }
-  return ig;
-}
 
 export function buildTree(root: string, startAbs: string, depth: number, ig: ReturnType<typeof ignore>): string {
   const lines: string[] = [];
@@ -48,7 +39,7 @@ const schema: ToolSchema = {
   type: "function",
   function: {
     name: "list_dir",
-    description: "List files and directories as an indented tree, respecting .gitignore.",
+    description: "List files and directories as an indented tree, respecting .gitignore/.harnessignore.",
     parameters: {
       type: "object",
       properties: {
@@ -65,7 +56,7 @@ registerTool("list_dir", {
     const args = JSON.parse(argsJson || "{}");
     const abs = resolveWithinRoot(ctx.workspaceRoot, args.path ?? ".");
     const depth = Math.min(4, args.depth ?? 2);
-    const ig = loadIgnorer(ctx.workspaceRoot);
+    const ig = loadWorkspaceIgnore(ctx.workspaceRoot);
     return buildTree(ctx.workspaceRoot, abs, depth, ig);
   },
 });
