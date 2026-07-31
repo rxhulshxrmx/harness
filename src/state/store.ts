@@ -35,6 +35,14 @@ export function listSessions(workspaceRoot: string): { id: string; title: string
     .sort((a, b) => b.filePath.localeCompare(a.filePath));
 }
 
+export function updateSessionTitle(filePath: string, title: string): void {
+  const lines = fs.readFileSync(filePath, "utf8").split("\n");
+  const meta = JSON.parse(lines[0]);
+  meta.title = title;
+  lines[0] = JSON.stringify(meta);
+  fs.writeFileSync(filePath, lines.join("\n"));
+}
+
 export function loadSession(filePath: string): Session {
   const lines = fs.readFileSync(filePath, "utf8").trim().split("\n").filter(Boolean);
   const meta = JSON.parse(lines[0]);

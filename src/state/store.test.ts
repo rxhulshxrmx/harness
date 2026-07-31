@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { appendToStore, listSessions, loadSession, newSessionFilePath } from "./store.ts";
+import { appendToStore, listSessions, loadSession, newSessionFilePath, updateSessionTitle } from "./store.ts";
 import { createSession } from "./session.ts";
 
 let dir: string;
@@ -45,4 +45,25 @@ test("loadSession reconstructs the full message list", () => {
   const loaded = loadSession(session.filePath);
   assert.equal(loaded.messages.length, 2);
   assert.equal(loaded.messages[1].content, "reply");
+});
+
+test("updateSessionTitle rewrites the meta line's title while leaving other fields and messages untouched", () => {
+  const session = createSession("", "gpt-4o");
+  session.filePath = newSessionFilePath(dir, session);
+  appendToStore(session, { role: "user", content: "fourth" });
+  appendToStore(session, { role: "assistant", content: "reply four" });
+
+  updateSessionTitle(session.filePath, "fourth message title");
+
+  const lines = fs.readFileSync(session.filePath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(lines[0].type, "meta");
+  assert.equal(lines[0].title, "fourth message title");
+  assert.equal(lines[0].model, "gpt-4o");
+  assert.equal(lines[0].createdAt, session.createdAt);
+  assert.equal(lines[1].content, "fourth");
+  assert.equal(lines[2].content, "reply four");
+
+  const loaded = loadSession(session.filePath);
+  assert.equal(loaded.title, "fourth message title");
+  assert.equal(loaded.messages.length, 2);
 });

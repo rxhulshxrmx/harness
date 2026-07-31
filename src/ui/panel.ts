@@ -3,7 +3,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { runTurn, type UiPort } from "../agent/loop.ts";
 import { createSession, type Session } from "../state/session.ts";
-import { newSessionFilePath } from "../state/store.ts";
+import { listSessions, loadSession, newSessionFilePath, updateSessionTitle } from "../state/store.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
 
 interface PendingApproval {
@@ -22,9 +22,10 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
   private sessionList: { id: string; title: string }[] = [];
 
   constructor(private readonly extensionUri: vscode.Uri) {
+    this.sessionList = this.tryListSessions().map(({ id, title }) => ({ id, title }));
     this.session = createSession("", "");
     this.session.filePath = this.tryCreateSessionFilePath(this.session);
-    this.sessionList = [{ id: this.session.id, title: "New Session" }];
+    this.sessionList.unshift({ id: this.session.id, title: "New Session" });
   }
 
   /**
@@ -38,6 +39,19 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       return newSessionFilePath(getWorkspaceRoot(), session);
     } catch {
       return undefined;
+    }
+  }
+
+  /**
+   * Best-effort listing of on-disk sessions. Returns an empty list (rather than
+   * letting getWorkspaceRoot()'s exception propagate) when there is no workspace
+   * folder open — same guarding rationale as tryCreateSessionFilePath above.
+   */
+  private tryListSessions(): { id: string; title: string; filePath: string }[] {
+    try {
+      return listSessions(getWorkspaceRoot());
+    } catch {
+      return [];
     }
   }
 
@@ -106,10 +120,19 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       case "newSession":
         this.session = createSession("", "");
         this.session.filePath = this.tryCreateSessionFilePath(this.session);
-        this.sessionList.push({ id: this.session.id, title: "New Session" });
+        this.sessionList.unshift({ id: this.session.id, title: "New Session" });
         this.touchedFiles = [];
         this.postState();
         break;
+      case "selectSession": {
+        const entry = this.tryListSessions().find((s) => s.id === msg.id);
+        if (entry) {
+          this.session = loadSession(entry.filePath);
+          this.touchedFiles = [];
+          this.postState();
+        }
+        break;
+      }
       case "toggleApprovalMode": {
         const cfg = vscode.workspace.getConfiguration("harness");
         const current = cfg.get<string>("approvalMode", "ask");
@@ -152,6 +175,13 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         vscode.window.showErrorMessage(`Harness: ${message}`);
       },
     };
+
+    if (!this.session.title) {
+      this.session.title = text.slice(0, 60);
+      const entry = this.sessionList.find((s) => s.id === this.session.id);
+      if (entry) entry.title = this.session.title;
+      if (this.session.filePath) updateSessionTitle(this.session.filePath, this.session.title);
+    }
 
     await runTurn(this.session, text, ui, this.controller.signal);
 
