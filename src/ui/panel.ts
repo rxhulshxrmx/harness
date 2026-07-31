@@ -127,7 +127,13 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       case "selectSession": {
         const entry = this.tryListSessions().find((s) => s.id === msg.id);
         if (entry) {
-          this.session = loadSession(entry.filePath);
+          try {
+            this.session = loadSession(entry.filePath);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`Harness: failed to load session: ${message}`);
+            break;
+          }
           this.touchedFiles = [];
           this.postState();
         }
@@ -180,7 +186,12 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       this.session.title = text.slice(0, 60);
       const entry = this.sessionList.find((s) => s.id === this.session.id);
       if (entry) entry.title = this.session.title;
-      if (this.session.filePath) updateSessionTitle(this.session.filePath, this.session.title);
+      try {
+        if (this.session.filePath) updateSessionTitle(this.session.filePath, this.session.title);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Harness: failed to save session title: ${message}`);
+      }
     }
 
     await runTurn(this.session, text, ui, this.controller.signal);
