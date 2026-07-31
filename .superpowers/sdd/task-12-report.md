@@ -89,3 +89,80 @@ configured yet).
 
 None beyond the already-noted, expected stub-dependency gaps (session persistence and diff
 tracking are inert until Tasks 13/15 land — this is by design, not a defect).
+
+## Fix Report (Critical finding remediation, 2026-07-31)
+
+### The bug
+
+The `"stop"` case in `handleMessage` only called `this.controller?.abort()`. It did not
+resolve or clear `this.pendingApproval`. Since `bash.ts`'s `await ctx.requestApproval(command)`
+awaits the Promise created in `startTurn`'s `UiPort.requestApproval`, and that Promise is
+*only* ever resolved by the `"approve"`/`"deny"` handlers, aborting a turn while an approval
+card was showing left that Promise pending forever. Consequence: `runTurn` never returns,
+`startTurn`'s tail cleanup (`this.controller = null; this.postState();`) never runs,
+`streaming` stays `true` forever, the Stop button never re-enables, and (since nothing guarded
+against it) the user could send a second `userSend` message, triggering a second concurrent
+`runTurn` on the same `session.messages` array. This violated spec §12 acceptance test 4.
+
+### What changed
+
+**Before** (`src/ui/panel.ts`, `"stop"` case):
+```ts
+case "stop":
+  this.controller?.abort();
+  break;
+```
+
+**After**:
+```ts
+case "stop":
+  this.controller?.abort();
+  if (this.pendingApproval) {
+    this.pendingApproval.resolve(false);
+    this.pendingApproval = null;
+  }
+  this.postState();
+  break;
+```
+
+This mirrors the existing `"deny"` case's resolve/clear pattern, unblocking any pending
+`ctx.requestApproval(...)` with `false` (same as an explicit Deny) so `runTurn` proceeds to
+its catch/finally and returns normally, letting `startTurn`'s tail cleanup run and `streaming`
+go back to `false`.
+
+**Also added** — defense-in-depth guard against concurrent turns, in the `"userSend"` case:
+
+**Before**:
+```ts
+case "userSend":
+  await this.startTurn(msg.text);
+  break;
+```
+
+**After**:
+```ts
+case "userSend":
+  if (this.controller !== null) {
+    break;
+  }
+  await this.startTurn(msg.text);
+  break;
+```
+
+This ignores a new `userSend` while a turn is already in progress (`this.controller !== null`),
+preventing a second concurrent `runTurn` on the same `session.messages` array even in edge
+cases the primary fix doesn't anticipate.
+
+### Verification
+
+- `npx tsc --noEmit` → clean, exit 0, no output.
+- `npm test` → 38/38 passing (unchanged; no unit test exists for panel.ts, which is
+  vscode-integration code with no live host available to this session, per the project's
+  established testing approach for vscode-dependent files).
+- `npm run build` → succeeded; confirmed `dist/extension.js` and
+  `dist/webview/{index.html,style.css,main.js}` all present with fresh timestamps.
+
+### Commit
+
+`a0d1b5bf2f40aea8c0c66bca40967af43f0eaa14` — "fix: resolve pending approval and guard
+concurrent turns on Stop"
