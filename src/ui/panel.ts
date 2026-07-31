@@ -23,8 +23,22 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.session = createSession("", "");
-    this.session.filePath = newSessionFilePath(getWorkspaceRoot(), this.session);
+    this.session.filePath = this.tryCreateSessionFilePath(this.session);
     this.sessionList = [{ id: this.session.id, title: "New Session" }];
+  }
+
+  /**
+   * Best-effort creation of the session's on-disk file path. Returns undefined
+   * (leaving the session unpersisted) when there is no workspace folder open —
+   * a normal, common VS Code state — rather than letting getWorkspaceRoot()'s
+   * exception propagate and crash extension activation or a message handler.
+   */
+  private tryCreateSessionFilePath(session: Session): string | undefined {
+    try {
+      return newSessionFilePath(getWorkspaceRoot(), session);
+    } catch {
+      return undefined;
+    }
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -91,7 +105,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         break;
       case "newSession":
         this.session = createSession("", "");
-        this.session.filePath = newSessionFilePath(getWorkspaceRoot(), this.session);
+        this.session.filePath = this.tryCreateSessionFilePath(this.session);
         this.sessionList.push({ id: this.session.id, title: "New Session" });
         this.touchedFiles = [];
         this.postState();
