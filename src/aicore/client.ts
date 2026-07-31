@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import type * as vscodeTypes from "vscode";
 import { getToken, invalidateToken } from "./auth.ts";
 import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse.ts";
+import { HttpError } from "./errors.ts";
 import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from "./types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
@@ -60,7 +61,7 @@ export async function chat(
       continue;
     }
     if (!res.ok) {
-      throw new Error(`AI Core request failed: ${res.status} ${await res.text()}`);
+      throw new HttpError(res.status, await res.text());
     }
 
     return readStream(res, onDelta);

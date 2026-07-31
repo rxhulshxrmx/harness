@@ -8,6 +8,7 @@ import type { Session } from "../state/session.ts";
 import { appendToStore } from "../state/store.ts";
 import { diffTracker } from "../state/diffTracker.ts";
 import { interruptedToolResults } from "./toolResults.ts";
+import { classifyError } from "../aicore/errors.ts";
 
 const MAX_STEPS = 40;
 
@@ -68,7 +69,9 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     }
     ui.showError(`Step budget (${MAX_STEPS}) exhausted for this turn.`);
   } catch (err) {
-    ui.showError(err instanceof Error ? err.message : String(err));
+    const classified = classifyError(err);
+    // An abort is the user clicking Stop — expected, not an error to surface.
+    if (classified.category !== "aborted") ui.showError(classified.message);
   } finally {
     ui.showTurnDiff(diffTracker.endTurn());
   }

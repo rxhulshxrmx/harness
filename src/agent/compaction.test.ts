@@ -31,6 +31,54 @@ test("compact replaces the transcript with a summary + last user message, keepin
   assert.equal(session.messages[1].content, "now add tests");
 });
 
+test("compact keeps the last two full turns verbatim when enough history exists, summarizing only what's older", async () => {
+  const session: Session = {
+    id: "1",
+    title: "t",
+    createdAt: "now",
+    model: "m",
+    messages: [
+      { role: "user", content: "turn 1" },
+      { role: "assistant", content: "working on turn 1" },
+      { role: "user", content: "turn 2" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [{ id: "c1", type: "function", function: { name: "bash", arguments: "{}" } }],
+      },
+      { role: "tool", tool_call_id: "c1", content: "tool output for turn 2" },
+      { role: "assistant", content: "done with turn 2" },
+      { role: "user", content: "turn 3" },
+      { role: "assistant", content: "working on turn 3" },
+    ],
+  };
+
+  const seenTranscripts: any[] = [];
+  const fakeChat = async (messages: any) => {
+    seenTranscripts.push(messages);
+    return { role: "assistant" as const, content: "Summary of turn 1." };
+  };
+
+  await compact(session, fakeChat);
+
+  // Only "turn 1" (and its assistant reply) should have been sent for
+  // summarization — turns 2 and 3 are kept verbatim.
+  const summarized = seenTranscripts[0];
+  assert.ok(summarized.some((m: any) => m.content === "turn 1"));
+  assert.ok(!summarized.some((m: any) => m.content === "turn 2"));
+  assert.ok(!summarized.some((m: any) => m.content === "turn 3"));
+
+  assert.match(session.messages[0].content!, /^\[Session summary\]/);
+  assert.match(session.messages[0].content!, /Summary of turn 1/);
+  // turn 2 (4 messages) + turn 3 (2 messages), fully intact including the
+  // tool_calls/tool-result pairing.
+  assert.equal(session.messages.length, 1 + 4 + 2);
+  assert.equal(session.messages[1].content, "turn 2");
+  assert.equal(session.messages[2].tool_calls?.[0].id, "c1");
+  assert.equal(session.messages[3].tool_call_id, "c1");
+  assert.equal(session.messages[5].content, "turn 3");
+});
+
 test("compact appends a compaction marker line to the session's JSONL file", async () => {
   const fs = await import("node:fs");
   const os = await import("node:os");
