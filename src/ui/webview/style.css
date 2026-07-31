@@ -1,8 +1,9 @@
+/* Colors are the IDE's own theme tokens throughout — no custom palette —
+   so this matches whatever theme (dark or light) the user has set. */
 :root {
-  --h-border: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
-  --h-border-strong: color-mix(in srgb, var(--vscode-foreground) 22%, transparent);
-  --h-surface: color-mix(in srgb, var(--vscode-foreground) 6%, var(--vscode-editor-background));
-  --h-surface-hover: color-mix(in srgb, var(--vscode-foreground) 10%, var(--vscode-editor-background));
+  --h-border: var(--vscode-widget-border, var(--vscode-panel-border));
+  --h-surface: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
+  --h-surface-hover: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
   --h-muted: var(--vscode-descriptionForeground);
   --h-radius-lg: 14px;
   --h-radius-md: 8px;
@@ -15,7 +16,7 @@ body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   color: var(--vscode-foreground);
-  background: var(--vscode-editor-background);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -77,10 +78,10 @@ button {
   width: 240px;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--h-border-strong);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--h-border));
   border-radius: var(--h-radius-md);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.3));
   z-index: 10;
   display: none;
   padding: 4px;
@@ -94,8 +95,8 @@ button {
   border-radius: var(--h-radius-md);
   cursor: pointer;
 }
-.history-row:hover { background: var(--h-surface-hover); }
-.history-row.active { background: var(--h-surface); }
+.history-row:hover { background: var(--vscode-list-hoverBackground); }
+.history-row.active { background: var(--vscode-list-inactiveSelectionBackground); }
 .history-row .title {
   flex: 1;
   min-width: 0;
@@ -180,7 +181,7 @@ button {
 /* Approval card */
 
 .approval {
-  border: 1px solid var(--h-border-strong);
+  border: 1px solid var(--h-border);
   border-radius: var(--h-radius-md);
   padding: 10px 12px;
   margin: 8px 0;
@@ -197,7 +198,7 @@ button {
 .approval-actions button {
   padding: 4px 12px;
   border-radius: var(--h-radius-md);
-  border: 1px solid var(--h-border-strong);
+  border: 1px solid var(--h-border);
 }
 .approval-actions button:hover { background: var(--h-surface-hover); }
 .approval-actions button.approve { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
@@ -239,9 +240,9 @@ button {
 
 #composerWrap { padding: 10px 12px 12px; flex-shrink: 0; }
 #composer {
-  border: 1px solid var(--h-border-strong);
+  border: 1px solid var(--vscode-input-border, var(--h-border));
   border-radius: var(--h-radius-lg);
-  background: var(--vscode-editor-background);
+  background: var(--vscode-input-background);
   overflow: hidden;
 }
 #composer:focus-within { border-color: var(--vscode-focusBorder); }
@@ -251,7 +252,7 @@ button {
   resize: none;
   height: 56px;
   max-height: 160px;
-  padding: 10px 12px 4px;
+  padding: 10px 12px;
   background: transparent;
   color: var(--vscode-input-foreground);
   border: none;
@@ -261,7 +262,13 @@ button {
 }
 #input::placeholder { color: var(--h-muted); }
 
-#composerFooter { display: flex; align-items: center; gap: 6px; padding: 4px 6px 6px 8px; }
+#composerFooter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 8px;
+  border-top: 1px solid var(--h-border);
+}
 
 .mode-pill {
   display: flex;
