@@ -8,7 +8,7 @@ import { saveCheckpoint, getCheckpoint, listCheckpoints, deleteCheckpointsFrom, 
 let dir: string;
 
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-checkpoints-test-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-checkpoints-test-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -99,7 +99,7 @@ test("rejects non-integer or negative turn indexes", () => {
 });
 
 test("getCheckpoint rejects a malformed or hand-written checkpoint file", () => {
-  const sessionDir = path.join(dir, ".harness", "checkpoints", "tampered");
+  const sessionDir = path.join(dir, ".couplet", "checkpoints", "tampered");
   fs.mkdirSync(sessionDir, { recursive: true });
 
   const write = (body: unknown) =>

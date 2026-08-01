@@ -19,7 +19,7 @@ interface PendingApproval {
   resolve: (approved: boolean) => void;
 }
 
-export class HarnessPanel implements vscode.WebviewViewProvider {
+export class CoupletPanel implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private session: Session;
   private streamingText = "";
@@ -99,7 +99,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
   }
 
   private async postState() {
-    const cfg = vscode.workspace.getConfiguration("harness");
+    const cfg = vscode.workspace.getConfiguration("couplet");
     const hasClientSecret = !!(await this.secrets.get(CLIENT_SECRET_KEY));
     this.view?.webview.postMessage({
       type: "state",
@@ -243,7 +243,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
             this.session = loadSession(entry.filePath);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Harness: failed to load session: ${message}`);
+            vscode.window.showErrorMessage(`Couplet: failed to load session: ${message}`);
             break;
           }
           this.touchedFiles = [];
@@ -260,7 +260,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
             if (root) deleteCheckpointsFrom(root, msg.id, 0);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Harness: failed to delete session: ${message}`);
+            vscode.window.showErrorMessage(`Couplet: failed to delete session: ${message}`);
             break;
           }
         }
@@ -278,7 +278,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         const allowedKeys = new Set(["deploymentId", "clientId", "aiCoreBaseUrl", "tokenUrl", "resourceGroup"]);
         if (allowedKeys.has(msg.key)) {
           await vscode.workspace
-            .getConfiguration("harness")
+            .getConfiguration("couplet")
             .update(msg.key, msg.value, vscode.ConfigurationTarget.Workspace);
           this.postState();
         }
@@ -305,7 +305,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       case "selectModel": {
         const chosen = this.models.list.find((d) => d.id === msg.deploymentId);
         if (!chosen) break;
-        const cfg = vscode.workspace.getConfiguration("harness");
+        const cfg = vscode.workspace.getConfiguration("couplet");
         await cfg.update("deploymentId", chosen.id, vscode.ConfigurationTarget.Workspace);
         await cfg.update("model", chosen.label, vscode.ConfigurationTarget.Workspace);
         this.postState();
@@ -315,19 +315,19 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         vscode.commands.executeCommand("workbench.action.openWorkspaceSettingsJson");
         break;
       case "toggleApprovalMode": {
-        const cfg = vscode.workspace.getConfiguration("harness");
+        const cfg = vscode.workspace.getConfiguration("couplet");
         const current = cfg.get<string>("approvalMode", "ask");
         await cfg.update("approvalMode", current === "ask" ? "auto" : "ask", vscode.ConfigurationTarget.Workspace);
         this.postState();
         break;
       }
       case "openDiff":
-        // harness.openDiff is registered in Task 14; calling it before that is a silent no-op.
-        vscode.commands.executeCommand("harness.openDiff", msg.file);
+        // couplet.openDiff is registered in Task 14; calling it before that is a silent no-op.
+        vscode.commands.executeCommand("couplet.openDiff", msg.file);
         break;
       case "revertFile":
-        // harness.revertFile is registered in Task 14; calling it before that is a silent no-op.
-        vscode.commands.executeCommand("harness.revertFile", msg.file);
+        // couplet.revertFile is registered in Task 14; calling it before that is a silent no-op.
+        vscode.commands.executeCommand("couplet.revertFile", msg.file);
         break;
       case "rewindToTurn": {
         if (this.controller !== null) break; // don't rewind mid-turn
@@ -344,24 +344,24 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         try {
           const result = await rewindToTurn(root, this.session, turnIndex);
           if (!result) {
-            vscode.window.showInformationMessage("Harness: nothing to rewind for that turn.");
+            vscode.window.showInformationMessage("Couplet: nothing to rewind for that turn.");
             break;
           }
           if (result.unrestorable.length) {
             vscode.window.showWarningMessage(
-              `Harness: could not restore (changed by a shell command): ${result.unrestorable.join(", ")}`,
+              `Couplet: could not restore (changed by a shell command): ${result.unrestorable.join(", ")}`,
             );
           }
           if (result.rejected.length) {
             vscode.window.showErrorMessage(
-              `Harness: refused to restore ${result.rejected.length} path(s) outside the workspace — this checkpoint file may have been tampered with: ${result.rejected.join(", ")}`,
+              `Couplet: refused to restore ${result.rejected.length} path(s) outside the workspace — this checkpoint file may have been tampered with: ${result.rejected.join(", ")}`,
             );
           }
           this.touchedFiles = [];
           this.postState();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`Harness: rewind failed: ${message}`);
+          vscode.window.showErrorMessage(`Couplet: rewind failed: ${message}`);
         }
         break;
       }
@@ -389,7 +389,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         this.postState();
       },
       showError: (message) => {
-        vscode.window.showErrorMessage(`Harness: ${message}`);
+        vscode.window.showErrorMessage(`Couplet: ${message}`);
       },
     };
 
@@ -401,7 +401,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         if (this.session.filePath) updateSessionTitle(this.session.filePath, this.session.title);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Harness: failed to save session title: ${message}`);
+        vscode.window.showErrorMessage(`Couplet: failed to save session title: ${message}`);
       }
     }
 

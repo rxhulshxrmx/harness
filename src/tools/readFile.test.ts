@@ -18,7 +18,7 @@ function ctx(workspaceRoot: string): ToolContext {
 }
 
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-test-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-test-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -49,12 +49,12 @@ test("formatFileContent reports binary files without reading them as text", () =
   assert.match(out, /^\[binary file, \d+ bytes\]$/);
 });
 
-test("read_file refuses a path excluded by .harnessignore", async () => {
+test("read_file refuses a path excluded by .coupletignore", async () => {
   clearTracked();
-  fs.writeFileSync(path.join(dir, ".harnessignore"), "secrets.env\n");
+  fs.writeFileSync(path.join(dir, ".coupletignore"), "secrets.env\n");
   fs.writeFileSync(path.join(dir, "secrets.env"), "TOKEN=abc");
   const result = await runTool("read_file", JSON.stringify({ file_path: "secrets.env" }), ctx(dir));
-  assert.match(result, /excluded by \.gitignore\/\.harnessignore/);
+  assert.match(result, /excluded by \.gitignore\/\.coupletignore/);
 });
 
 test("read_file succeeds and records the read for stale-file tracking", async () => {

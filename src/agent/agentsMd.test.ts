@@ -7,7 +7,7 @@ import { loadAgentsMd } from "./agentsMd.ts";
 
 let dir: string;
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-agentsmd-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-agentsmd-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -25,7 +25,7 @@ test("reads AGENTS.md and wraps it under the heading", () => {
 });
 
 test("falls back to CLAUDE.md when AGENTS.md is absent", () => {
-  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "harness-agentsmd2-"));
+  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-agentsmd2-"));
   fs.writeFileSync(path.join(dir2, "CLAUDE.md"), "Prefer functional style.");
   const out = loadAgentsMd(dir2);
   assert.match(out, /Prefer functional style\./);

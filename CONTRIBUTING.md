@@ -1,4 +1,4 @@
-# Developing Harness
+# Developing Couplet
 
 ```sh
 npm install
@@ -6,7 +6,7 @@ npm run build      # bundle the extension with esbuild
 npm run watch      # rebuild on change
 npm run typecheck
 npm test           # node:test; most modules run without a vscode host
-npm run package    # produces harness-<version>.vsix via vsce
+npm run package    # produces couplet-<version>.vsix via vsce
 ```
 
 Press `F5` to launch an Extension Development Host for anything that needs the
@@ -23,5 +23,5 @@ against a deployment.
   one that imports it (`aicore/sse.ts` vs `aicore/client.ts`, `agent/toolResults.ts`
   vs `agent/loop.ts`).
 - `.vscodeignore` controls what ships in the `.vsix`. Check the file list vsce
-  prints when packaging — `.harness/` (session transcripts and checkpoints
+  prints when packaging — `.couplet/` (session transcripts and checkpoints
   containing file contents) has leaked in before.

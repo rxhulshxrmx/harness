@@ -8,7 +8,7 @@ import { recordRead, isStale, clearTracked } from "./fileTracker.ts";
 let dir: string;
 
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-filetracker-test-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-filetracker-test-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });

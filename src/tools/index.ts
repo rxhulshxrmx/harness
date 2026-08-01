@@ -45,14 +45,14 @@ export async function runTool(name: string, argsJson: string, ctx: ToolContext):
   }
 }
 
-// Shared .gitignore + .harnessignore loader used by any tool that walks or
+// Shared .gitignore + .coupletignore loader used by any tool that walks or
 // gates access to workspace paths (list_dir, grep, read_file, search_replace).
-// .harnessignore lets a project exclude paths from agent tool access without
+// .coupletignore lets a project exclude paths from agent tool access without
 // touching .gitignore (e.g. to keep secrets or generated files out of the
 // agent's reach even when they're tracked in git).
 export function loadWorkspaceIgnore(root: string): ReturnType<typeof ignore> {
   const ig = ignore();
-  for (const file of [".gitignore", ".harnessignore"]) {
+  for (const file of [".gitignore", ".coupletignore"]) {
     const filePath = path.join(root, file);
     if (fs.existsSync(filePath)) {
       ig.add(fs.readFileSync(filePath, "utf8"));

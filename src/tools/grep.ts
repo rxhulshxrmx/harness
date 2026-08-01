@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { registerTool, resolveWithinRoot, loadWorkspaceIgnore, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".couplet"]);
 const MAX_FILE_BYTES = 1_000_000;
 
 export function searchInText(content: string, pattern: RegExp, filePath: string, maxResults: number): string[] {
@@ -35,7 +35,7 @@ const schema: ToolSchema = {
   type: "function",
   function: {
     name: "grep",
-    description: "Search file contents by regex across the workspace, respecting .gitignore/.harnessignore.",
+    description: "Search file contents by regex across the workspace, respecting .gitignore/.coupletignore.",
     parameters: {
       type: "object",
       properties: {

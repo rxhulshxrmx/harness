@@ -1,5 +1,5 @@
 // Regex-based secret redaction applied to every tool result before it is
-// persisted to .harness/sessions/*.jsonl or shown in the webview. Patterns
+// persisted to .couplet/sessions/*.jsonl or shown in the webview. Patterns
 // ported from codex's secret sanitizer (openai/codex, secrets/src/sanitizer.rs).
 // Each pattern redacts only the secret value, preserving any surrounding key
 // name/delimiter so the redacted text still reads sensibly.

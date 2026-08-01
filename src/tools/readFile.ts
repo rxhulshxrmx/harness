@@ -49,7 +49,7 @@ registerTool("read_file", {
     const args = JSON.parse(argsJson);
     const abs = resolveWithinRoot(ctx.workspaceRoot, args.file_path);
     if (isIgnoredPath(ctx.workspaceRoot, abs)) {
-      return `Error: path is excluded by .gitignore/.harnessignore (${args.file_path})`;
+      return `Error: path is excluded by .gitignore/.coupletignore (${args.file_path})`;
     }
     const content = formatFileContent(abs, args.offset ?? 1, args.limit ?? 400);
     recordRead(abs);

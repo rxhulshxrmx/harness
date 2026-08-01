@@ -4,7 +4,7 @@ import * as path from "node:path";
 // Per-turn rewind checkpoints: for every turn, records the pre-turn content
 // of every file touched (null = file didn't exist yet, i.e. it was
 // created), plus enough session state to truncate the chat back to right
-// before that turn. Persisted to .harness/checkpoints/<session-id>/ so
+// before that turn. Persisted to .couplet/checkpoints/<session-id>/ so
 // rewind survives a reload, capped to the most recent MAX_CHECKPOINTS turns.
 
 export interface Checkpoint {
@@ -38,7 +38,7 @@ function assertSafeTurnIndex(turnIndex: number): void {
 
 function checkpointsDir(workspaceRoot: string, sessionId: string): string {
   assertSafeSessionId(sessionId);
-  return path.join(workspaceRoot, ".harness", "checkpoints", sessionId);
+  return path.join(workspaceRoot, ".couplet", "checkpoints", sessionId);
 }
 
 function checkpointPath(workspaceRoot: string, sessionId: string, turnIndex: number): string {
@@ -71,7 +71,7 @@ function evictOldest(dir: string): void {
 
 // A checkpoint file lives inside the workspace, so its contents are only as
 // trustworthy as the repository that was opened — a cloned repo can ship a
-// hand-written .harness/checkpoints/ tree. Validate the shape rather than
+// hand-written .couplet/checkpoints/ tree. Validate the shape rather than
 // casting, so rewind never iterates attacker-shaped data. (Path containment
 // for the individual file keys is enforced separately, in rewind.ts.)
 function parseCheckpoint(raw: unknown): Checkpoint | null {

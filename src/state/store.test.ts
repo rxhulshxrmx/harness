@@ -8,7 +8,7 @@ import { createSession } from "./session.ts";
 
 let dir: string;
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-store-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-store-"));
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
@@ -27,7 +27,7 @@ test("appendToStore creates the file with a meta line then appends messages", ()
   assert.equal(lines[2].role, "assistant");
 });
 
-test("listSessions finds sessions under .harness/sessions and reads their titles", () => {
+test("listSessions finds sessions under .couplet/sessions and reads their titles", () => {
   const session = createSession("second session", "gpt-4o");
   session.filePath = newSessionFilePath(dir, session);
   appendToStore(session, { role: "user", content: "second session" });

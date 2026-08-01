@@ -7,7 +7,7 @@ import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from
 
 declare function require(id: "vscode"): typeof vscodeTypes;
 
-export const CLIENT_SECRET_KEY = "harness.clientSecret";
+export const CLIENT_SECRET_KEY = "couplet.clientSecret";
 
 // Credentials are entered as separate fields (Client ID, Client Secret, AI
 // Core Base URL, Auth URL, Resource Group) in the settings panel, matching
@@ -16,21 +16,21 @@ export const CLIENT_SECRET_KEY = "harness.clientSecret";
 // SecretStorage; the rest are plain (non-secret) identifiers/URLs.
 export async function loadServiceKey(): Promise<ServiceKey> {
   const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("harness");
+  const cfg = vscode.workspace.getConfiguration("couplet");
   const clientid = cfg.get<string>("clientId", "");
   const url = cfg.get<string>("tokenUrl", "");
   const AI_API_URL = cfg.get<string>("aiCoreBaseUrl", "");
   const clientsecret = (await getSecrets().get(CLIENT_SECRET_KEY)) ?? "";
 
   if (!clientid || !clientsecret || !url || !AI_API_URL) {
-    throw new Error("SAP AI Core credentials are not fully set — open Harness settings (gear icon) to add them.");
+    throw new Error("SAP AI Core credentials are not fully set — open Couplet settings (gear icon) to add them.");
   }
   return { clientid, clientsecret, url, serviceurls: { AI_API_URL } };
 }
 
 export function readConfig() {
   const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("harness");
+  const cfg = vscode.workspace.getConfiguration("couplet");
   return {
     deploymentId: cfg.get<string>("deploymentId", ""),
     resourceGroup: cfg.get<string>("resourceGroup", "default"),

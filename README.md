@@ -1,4 +1,4 @@
-# Harness
+# Couplet
 
 An agentic coding assistant that runs entirely inside VS Code (and VS Code-based
 editors like Cursor), powered by SAP AI Core. No separate server process — the
@@ -7,7 +7,7 @@ only network calls it makes are to your own SAP AI Core endpoint.
 
 ## Install
 
-You need one file: `harness-<version>.vsix`. Pick whichever is easier.
+You need one file: `couplet-<version>.vsix`. Pick whichever is easier.
 
 **From the editor (no terminal):**
 
@@ -19,8 +19,8 @@ You need one file: `harness-<version>.vsix`. Pick whichever is easier.
 **From a terminal:**
 
 ```sh
-code --install-extension harness-0.0.9.vsix     # VS Code
-cursor --install-extension harness-0.0.9.vsix   # Cursor
+code --install-extension couplet-0.0.12.vsix     # VS Code
+cursor --install-extension couplet-0.0.12.vsix   # Cursor
 ```
 
 Then reload the window.
@@ -32,7 +32,7 @@ be higher, otherwise the editor keeps the cached copy.
 
 Everything is entered in the panel; you never have to edit `settings.json`.
 
-1. Click the Harness icon in the activity bar (left edge).
+1. Click the Couplet icon in the activity bar (left edge).
 2. Click the gear icon in the panel header.
 3. Fill in the fields from your SAP AI Core service key:
 
@@ -71,16 +71,16 @@ commands to complete the task.
 
 ### Keeping the agent away from certain files
 
-Add a `.harnessignore` to the workspace root, same syntax as `.gitignore`. Listed
+Add a `.coupletignore` to the workspace root, same syntax as `.gitignore`. Listed
 paths are excluded from `read_file`, `search_replace`, `grep`, and `list_dir`.
 `.gitignore` is honoured too. Note this does not restrict shell commands the
 agent runs.
 
 ### What gets written to your workspace
 
-A `.harness/` directory holding session transcripts (`sessions/*.jsonl`) and
+A `.couplet/` directory holding session transcripts (`sessions/*.jsonl`) and
 rewind checkpoints (`checkpoints/`). Checkpoints contain copies of file contents,
-so add `.harness/` to your `.gitignore`.
+so add `.couplet/` to your `.gitignore`.
 
 ## Configuration reference
 
@@ -88,15 +88,15 @@ Most people never need these — the settings panel covers the common ones.
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `harness.clientId` | `""` | SAP AI Core client ID |
-| `harness.aiCoreBaseUrl` | `""` | `serviceurls.AI_API_URL` from the service key |
-| `harness.tokenUrl` | `""` | OAuth token URL (`url` from the service key) |
-| `harness.deploymentId` | `""` | Deployment to send inference requests to |
-| `harness.resourceGroup` | `"default"` | AI Core resource group header |
-| `harness.apiVersion` | `"2024-10-21"` | Inference API version |
-| `harness.model` | `""` | Display-only label in the composer |
-| `harness.approvalMode` | `"ask"` | `ask` or `auto` |
-| `harness.contextBudget` | `100000` | Token budget before the transcript is compacted |
+| `couplet.clientId` | `""` | SAP AI Core client ID |
+| `couplet.aiCoreBaseUrl` | `""` | `serviceurls.AI_API_URL` from the service key |
+| `couplet.tokenUrl` | `""` | OAuth token URL (`url` from the service key) |
+| `couplet.deploymentId` | `""` | Deployment to send inference requests to |
+| `couplet.resourceGroup` | `"default"` | AI Core resource group header |
+| `couplet.apiVersion` | `"2024-10-21"` | Inference API version |
+| `couplet.model` | `""` | Display-only label in the composer |
+| `couplet.approvalMode` | `"ask"` | `ask` or `auto` |
+| `couplet.contextBudget` | `100000` | Token budget before the transcript is compacted |
 
 The client secret is deliberately absent from this table — it lives in
 SecretStorage and has no `settings.json` key.

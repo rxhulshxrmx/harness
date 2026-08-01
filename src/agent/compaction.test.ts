@@ -83,7 +83,7 @@ test("compact appends a compaction marker line to the session's JSONL file", asy
   const fs = await import("node:fs");
   const os = await import("node:os");
   const path = await import("node:path");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-compact-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "couplet-compact-"));
   const filePath = path.join(dir, "s.jsonl");
   fs.writeFileSync(filePath, JSON.stringify({ type: "meta", title: "t" }) + "\n");
 

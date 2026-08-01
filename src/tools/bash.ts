@@ -43,7 +43,7 @@ registerTool("bash", {
     const timeoutMs = Math.min(300_000, args.timeout_ms ?? 60_000);
 
     const vscode = require("vscode");
-    const approvalMode = vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask");
+    const approvalMode = vscode.workspace.getConfiguration("couplet").get<string>("approvalMode", "ask");
 
     const classification = classifyCommand(command);
     const autoOk = approvalMode === "auto" && classification.decision === "allow";

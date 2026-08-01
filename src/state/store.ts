@@ -4,7 +4,7 @@ import type { Session } from "./session.ts";
 import type { Message } from "../aicore/types.ts";
 
 function sessionsDir(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ".harness", "sessions");
+  return path.join(workspaceRoot, ".couplet", "sessions");
 }
 
 export function newSessionFilePath(workspaceRoot: string, session: Session): string {

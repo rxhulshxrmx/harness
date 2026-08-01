@@ -4,7 +4,7 @@ import ignore from "ignore";
 import { registerTool, resolveWithinRoot, getWorkspaceRoot, loadWorkspaceIgnore, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".harness"]);
+const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".couplet"]);
 const MAX_ENTRIES = 500;
 
 export function buildTree(root: string, startAbs: string, depth: number, ig: ReturnType<typeof ignore>): string {
@@ -39,7 +39,7 @@ const schema: ToolSchema = {
   type: "function",
   function: {
     name: "list_dir",
-    description: "List files and directories as an indented tree, respecting .gitignore/.harnessignore.",
+    description: "List files and directories as an indented tree, respecting .gitignore/.coupletignore.",
     parameters: {
       type: "object",
       properties: {

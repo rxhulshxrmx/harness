@@ -1,6 +1,6 @@
 {
-  "name": "harness",
-  "displayName": "Harness",
+  "name": "couplet",
+  "displayName": "Couplet",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "sharma-so",
   "version": "0.0.12",
@@ -22,61 +22,61 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "harness",
-          "title": "Harness",
+          "id": "couplet",
+          "title": "Couplet",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "harness": [
+      "couplet": [
         {
           "type": "webview",
-          "id": "harness.chat",
-          "name": "Harness Chat"
+          "id": "couplet.chat",
+          "name": "Couplet Chat"
         }
       ]
     },
     "commands": [
       {
-        "command": "harness.newSession",
-        "title": "Harness: New Session"
+        "command": "couplet.newSession",
+        "title": "Couplet: New Session"
       }
     ],
     "configuration": {
       "properties": {
-        "harness.clientId": {
+        "couplet.clientId": {
           "type": "string",
           "default": "",
-          "description": "SAP AI Core client ID (Set via the Harness settings panel, not this field, is recommended)."
+          "description": "SAP AI Core client ID (Set via the Couplet settings panel, not this field, is recommended)."
         },
-        "harness.aiCoreBaseUrl": {
+        "couplet.aiCoreBaseUrl": {
           "type": "string",
           "default": "",
           "description": "SAP AI Core API base URL (serviceurls.AI_API_URL from your service key)."
         },
-        "harness.tokenUrl": {
+        "couplet.tokenUrl": {
           "type": "string",
           "default": "",
           "description": "SAP AI Core OAuth token URL (the \"url\" field from your service key)."
         },
-        "harness.deploymentId": {
+        "couplet.deploymentId": {
           "type": "string",
           "default": ""
         },
-        "harness.resourceGroup": {
+        "couplet.resourceGroup": {
           "type": "string",
           "default": "default"
         },
-        "harness.apiVersion": {
+        "couplet.apiVersion": {
           "type": "string",
           "default": "2024-10-21"
         },
-        "harness.model": {
+        "couplet.model": {
           "type": "string",
           "default": ""
         },
-        "harness.approvalMode": {
+        "couplet.approvalMode": {
           "type": "string",
           "enum": [
             "ask",
@@ -84,7 +84,7 @@
           ],
           "default": "ask"
         },
-        "harness.contextBudget": {
+        "couplet.contextBudget": {
           "type": "number",
           "default": 100000
         }

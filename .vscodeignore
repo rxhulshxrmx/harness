@@ -2,6 +2,7 @@
 src/**
 docs/**
 .superpowers/**
+.couplet/**
 .harness/**
 node_modules/**
 dist-check/**
