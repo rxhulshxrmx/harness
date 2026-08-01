@@ -82,3 +82,42 @@ test("deleteCheckpointsFrom removes the given turn and every later one, keeping 
 test("deleteCheckpointsFrom on a session with no checkpoints is a no-op", () => {
   assert.doesNotThrow(() => deleteCheckpointsFrom(dir, "no-such-session", 0));
 });
+
+// Both of these reach the filesystem path: the session id is parsed out of a
+// filename found in the workspace, and the turn index comes from a webview
+// message. Neither may be concatenated into a path unchecked.
+test("rejects session ids that could escape the checkpoints directory", () => {
+  for (const id of ["../../etc", "a/b", "..", "a\\b", ""]) {
+    assert.throws(() => getCheckpoint(dir, id, 0), /Unsafe session id/, id);
+  }
+});
+
+test("rejects non-integer or negative turn indexes", () => {
+  for (const turnIndex of [-1, 1.5, NaN, "../../../../etc/passwd" as unknown as number]) {
+    assert.throws(() => getCheckpoint(dir, "s1", turnIndex), /Invalid turn index/, String(turnIndex));
+  }
+});
+
+test("getCheckpoint rejects a malformed or hand-written checkpoint file", () => {
+  const sessionDir = path.join(dir, ".harness", "checkpoints", "tampered");
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  const write = (body: unknown) =>
+    fs.writeFileSync(path.join(sessionDir, "checkpoint-0.json"), JSON.stringify(body));
+
+  write({ turnIndex: 0, messageCountBefore: 0, userText: "x", files: "not-an-object", unrestorable: [] });
+  assert.equal(getCheckpoint(dir, "tampered", 0), null);
+
+  write({ turnIndex: 0, messageCountBefore: -5, userText: "x", files: {}, unrestorable: [] });
+  assert.equal(getCheckpoint(dir, "tampered", 0), null);
+
+  write({ turnIndex: 0, messageCountBefore: 0, userText: "x", files: { "a.ts": 42 }, unrestorable: [] });
+  assert.equal(getCheckpoint(dir, "tampered", 0), null);
+
+  fs.writeFileSync(path.join(sessionDir, "checkpoint-0.json"), "{ not json");
+  assert.equal(getCheckpoint(dir, "tampered", 0), null);
+
+  // A well-formed one still round-trips.
+  write({ turnIndex: 0, messageCountBefore: 2, userText: "x", files: { "a.ts": "old", "b.ts": null }, unrestorable: [] });
+  assert.equal(getCheckpoint(dir, "tampered", 0)?.messageCountBefore, 2);
+});

@@ -235,6 +235,8 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         if (this.controller !== null) break; // don't rewind mid-turn
         const root = this.tryGetWorkspaceRoot();
         if (!root) break;
+        const turnIndex = Number(msg.turnIndex);
+        if (!Number.isInteger(turnIndex) || turnIndex < 0) break;
         const choice = await vscode.window.showWarningMessage(
           "Rewind to before this turn? Later messages will be discarded and any files it touched will be restored.",
           { modal: true },
@@ -242,7 +244,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         );
         if (choice !== "Rewind") break;
         try {
-          const result = await rewindToTurn(root, this.session, msg.turnIndex);
+          const result = await rewindToTurn(root, this.session, turnIndex);
           if (!result) {
             vscode.window.showInformationMessage("Harness: nothing to rewind for that turn.");
             break;
@@ -250,6 +252,11 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
           if (result.unrestorable.length) {
             vscode.window.showWarningMessage(
               `Harness: could not restore (changed by a shell command): ${result.unrestorable.join(", ")}`,
+            );
+          }
+          if (result.rejected.length) {
+            vscode.window.showErrorMessage(
+              `Harness: refused to restore ${result.rejected.length} path(s) outside the workspace — this checkpoint file may have been tampered with: ${result.rejected.join(", ")}`,
             );
           }
           this.touchedFiles = [];

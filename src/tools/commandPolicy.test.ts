@@ -165,3 +165,37 @@ test("classifyCommand read-only fallback commands stay allowed with no severity"
   assert.equal(result.decision, "allow");
   assert.equal(result.severity, undefined);
 });
+
+// An "allow" rule must never auto-approve a command the deny-list would have
+// blocked. Each of these points an allowlisted program at a path outside the
+// workspace, which is real code execution: "npm test --prefix DIR" runs that
+// directory's test script, "pytest DIR" imports its conftest.py.
+test("allow rules never override the deny-list for absolute paths outside the workspace", () => {
+  for (const cmd of [
+    "npm test --prefix /tmp/evil",
+    "pytest /tmp/evil",
+    "pytest --rootdir /tmp/evil",
+    "npx tsc --project /tmp/evil/tsconfig.json",
+  ]) {
+    assert.equal(classifyCommand(cmd).decision, "confirm", cmd);
+  }
+});
+
+test("allow rules require an exact match, so trailing arguments fall through to the heuristics", () => {
+  // Still allowed: the heuristics tier auto-approves these prefixes and sees
+  // nothing dangerous in the extra arguments.
+  assert.equal(classifyCommand("npm test -- --watch").decision, "allow");
+  assert.equal(classifyCommand("pytest -k foo").decision, "allow");
+  assert.equal(classifyCommand("npx tsc --noEmit").decision, "allow");
+
+  // Bare forms still match the rule table directly.
+  assert.equal(classifyCommand("npm test").decision, "allow");
+  assert.equal(classifyCommand("pytest").decision, "allow");
+  assert.equal(classifyCommand("npx tsc").decision, "allow");
+});
+
+test("confirm rules stay prefix matches so extra arguments cannot dodge them", () => {
+  assert.equal(classifyCommand("rm -rf ./dist --verbose").severity, "dangerous");
+  assert.equal(classifyCommand("git push --force origin main").severity, "dangerous");
+  assert.equal(classifyCommand("sudo rm -rf /").decision, "confirm");
+});

@@ -1,14 +1,18 @@
-import * as path from "node:path";
 import type * as vscodeTypes from "vscode";
 import type { Session } from "./session.ts";
 import { getCheckpoint, deleteCheckpointsFrom } from "./checkpoints.ts";
 import { rewriteStoreMessages } from "./store.ts";
+import { resolveWithinRoot } from "../tools/index.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
 
 export interface RewindResult {
   restored: string[];
   unrestorable: string[];
+  // Paths in the checkpoint that resolved outside the workspace and were
+  // refused. Never expected from a checkpoint this extension wrote; surfaced
+  // rather than silently dropped because it means the file was tampered with.
+  rejected: string[];
 }
 
 // Restores every file touched by `turnIndex` back to its pre-turn content
@@ -23,8 +27,20 @@ export async function rewindToTurn(workspaceRoot: string, session: Session, turn
 
   const vscode = require("vscode");
   const restored: string[] = [];
+  const rejected: string[] = [];
   for (const [file, before] of Object.entries(checkpoint.files)) {
-    const uri = vscode.Uri.file(path.join(workspaceRoot, file));
+    // Same containment rule every tool goes through. A checkpoint is read
+    // from inside the workspace, so its keys are untrusted input: without
+    // this, a "../../.." key would let an opened repository overwrite or
+    // delete files anywhere the editor can write.
+    let abs: string;
+    try {
+      abs = resolveWithinRoot(workspaceRoot, file);
+    } catch {
+      rejected.push(file);
+      continue;
+    }
+    const uri = vscode.Uri.file(abs);
     const edit = new vscode.WorkspaceEdit();
     if (before === null) {
       edit.deleteFile(uri, { ignoreIfNotExists: true });
@@ -44,5 +60,5 @@ export async function rewindToTurn(workspaceRoot: string, session: Session, turn
   if (session.filePath) rewriteStoreMessages(session.filePath, session.messages);
   deleteCheckpointsFrom(workspaceRoot, session.id, turnIndex);
 
-  return { restored, unrestorable: checkpoint.unrestorable };
+  return { restored, unrestorable: checkpoint.unrestorable, rejected };
 }

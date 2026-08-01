@@ -63,17 +63,25 @@ function matchToken(pattern: ArgPattern, token: string | undefined): boolean {
   return pattern.anyOf.includes(token);
 }
 
-function matchesArgs(args: string[], pattern: ArgPattern[] | undefined): boolean {
-  if (!pattern) return true;
-  if (args.length < pattern.length) return false;
-  return pattern.every((p, i) => matchToken(p, args[i]));
+function matchesArgs(args: string[], pattern: ArgPattern[] | undefined, exact: boolean): boolean {
+  const expected = pattern ?? [];
+  if (exact ? args.length !== expected.length : args.length < expected.length) return false;
+  return expected.every((p, i) => matchToken(p, args[i]));
 }
 
 function classifyByRuleTable(tokens: string[]): Classification | null {
   const rules = RULES_BY_PROGRAM.get(tokens[0]);
   if (!rules) return null;
+  const args = tokens.slice(1);
   for (const rule of rules) {
-    if (matchesArgs(tokens.slice(1), rule.args)) {
+    // "allow" rules must match the command exactly. A trailing argument can
+    // point an otherwise-safe program at something outside the workspace
+    // ("npm test --prefix /tmp/evil" runs that directory's test script,
+    // "pytest /tmp/evil" imports its conftest.py), so anything with extra
+    // tokens falls through to the heuristics tier, which still applies the
+    // deny-list. "confirm" rules stay prefix matches — they only add
+    // reason/severity detail and can never widen what runs unattended.
+    if (matchesArgs(args, rule.args, rule.decision === "allow")) {
       return { decision: rule.decision, reason: rule.reason, severity: rule.severity };
     }
   }
@@ -141,10 +149,16 @@ function classifyWithHeuristics(command: string): Classification {
 
 export function classifyCommand(command: string): Classification {
   const trimmed = command.trim();
+
   if (!hasShellMetacharacters(trimmed)) {
-    const tokens = trimmed.split(/\s+/);
-    const ruleMatch = classifyByRuleTable(tokens);
-    if (ruleMatch) return ruleMatch;
+    const ruleMatch = classifyByRuleTable(trimmed.split(/\s+/));
+    // The deny-list is a hard veto over the rule table, never a fallback the
+    // table can skip past: a rule may add detail to something that already
+    // needs approval, but must not auto-approve anything the heuristics tier
+    // would have blocked.
+    if (ruleMatch && !(ruleMatch.decision === "allow" && isNeverAutoApproved(trimmed))) {
+      return ruleMatch;
+    }
   }
   return classifyWithHeuristics(trimmed);
 }
