@@ -1,7 +1,15 @@
 /* Colors are the IDE's own theme tokens throughout — no custom palette —
    so this matches whatever theme (dark or light) the user has set. */
 :root {
-  --h-border: var(--vscode-widget-border, var(--vscode-panel-border));
+  /* Derived from the foreground rather than a border token. widget.border is
+     undefined in most themes and panel.border is tuned to sit against the
+     editor background, so on our lighter input-background surfaces it lands
+     within ~1.09 contrast — invisible. A theme may also define widget.border
+     as transparent, which a var() fallback cannot rescue, since fallbacks only
+     fire for undefined variables. Mixing the foreground instead is defined in
+     every theme and self-corrects between light and dark. */
+  --h-border: #8080803d; /* for engines without color-mix */
+  --h-border: color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
   --h-surface: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
   --h-surface-hover: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
   --h-muted: var(--vscode-descriptionForeground);
