@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { chat } from "./aicore/client.ts";
 import { setExtensionContext } from "./aicore/context.ts";
 import { HarnessPanel } from "./ui/panel.ts";
 import { diffTracker, BeforeContentProvider } from "./state/diffTracker.ts";
@@ -12,22 +11,6 @@ import "./tools/bash.ts";
 
 export function activate(context: vscode.ExtensionContext) {
   setExtensionContext(context);
-  const output = vscode.window.createOutputChannel("Harness");
-  context.subscriptions.push(output);
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("harness.ping", async () => {
-      output.show(true);
-      output.appendLine("Sending: say hello");
-      try {
-        const reply = await chat([{ role: "user", content: "say hello" }], [], (delta) => output.append(delta));
-        output.appendLine("");
-        output.appendLine(`[done] finish content length: ${(reply.content ?? "").length}`);
-      } catch (err) {
-        output.appendLine(`[error] ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }),
-  );
 
   const panel = new HarnessPanel(context.extensionUri, context.secrets);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("harness.chat", panel));

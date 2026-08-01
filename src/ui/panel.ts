@@ -7,7 +7,8 @@ import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, dele
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
-import { CLIENT_SECRET_KEY } from "../aicore/client.ts";
+import { chat, CLIENT_SECRET_KEY } from "../aicore/client.ts";
+import { classifyError } from "../aicore/errors.ts";
 
 interface PendingApproval {
   id: string;
@@ -25,6 +26,7 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
   private touchedFiles: string[] = [];
   private controller: AbortController | null = null;
   private sessionList: { id: string; title: string }[] = [];
+  private connectionTest: { state: "idle" | "testing" | "ok" | "error"; message?: string } = { state: "idle" };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -119,7 +121,44 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         deploymentId: cfg.get<string>("deploymentId", ""),
         hasClientSecret,
       },
+      connectionTest: this.connectionTest,
     });
+  }
+
+  /**
+   * Sends one trivial completion to verify credentials, the endpoint, and
+   * streaming actually work — the failure that matters most on first run, and
+   * the one worth catching here rather than midway through a real task.
+   */
+  private async testConnection() {
+    this.connectionTest = { state: "testing" };
+    this.postState();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      let streamed = "";
+      const reply = await chat(
+        [{ role: "user", content: "Reply with the single word: OK" }],
+        [],
+        (delta) => (streamed += delta),
+        controller.signal,
+      );
+      const text = (reply.content ?? streamed).trim();
+      this.connectionTest = {
+        state: "ok",
+        message: text ? `Connected. Model replied: "${text.slice(0, 40)}"` : "Connected, but the reply was empty.",
+      };
+    } catch (err) {
+      const classified = classifyError(err);
+      this.connectionTest = {
+        state: "error",
+        message: classified.category === "aborted" ? "Timed out after 30s." : classified.message,
+      };
+    } finally {
+      clearTimeout(timeout);
+      this.postState();
+    }
   }
 
   private async handleMessage(msg: any) {
@@ -213,6 +252,9 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         }
         break;
       }
+      case "testConnection":
+        if (this.connectionTest.state !== "testing") await this.testConnection();
+        break;
       case "openSettingsJson":
         vscode.commands.executeCommand("workbench.action.openWorkspaceSettingsJson");
         break;

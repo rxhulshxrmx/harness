@@ -55,6 +55,10 @@
       <label for="deploymentIdInput">Deployment ID</label>
       <input id="deploymentIdInput" type="text" placeholder="d0123456789abcdef" />
     </div>
+    <div class="settings-field">
+      <button id="testConnectionBtn" class="settings-btn">Test connection</button>
+      <p class="settings-status" id="connectionStatus"></p>
+    </div>
     <p class="settings-hint">These values come from your SAP AI Core service key. They're stored locally and only used to call the API from this extension — the secret is kept in your OS keychain, never in settings.json. <a href="#" id="openSettingsJsonLink">Open settings.json</a></p>
   </div>
   <div id="messages"></div>

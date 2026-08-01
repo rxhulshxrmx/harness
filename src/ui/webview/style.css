@@ -97,6 +97,19 @@ button {
 }
 .settings-field input:focus { outline: none; border-color: var(--vscode-focusBorder); }
 .settings-hint { font-size: 0.82em; color: var(--h-muted); margin: 0; }
+.settings-btn {
+  align-self: flex-start;
+  background: var(--h-surface);
+  border-radius: var(--h-radius-md);
+  padding: 5px 12px;
+  font-size: 0.9em;
+}
+.settings-btn:hover { background: var(--h-surface-hover); }
+.settings-btn:disabled { opacity: 0.5; cursor: default; }
+.settings-status { font-size: 0.82em; margin: 0; }
+.settings-status.testing { color: var(--h-muted); }
+.settings-status.ok { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #89d185)); }
+.settings-status.error { color: var(--vscode-editorError-foreground); }
 .settings-hint a { color: var(--vscode-textLink-foreground); cursor: pointer; }
 
 /* Session history dropdown */

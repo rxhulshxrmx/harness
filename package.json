@@ -3,7 +3,7 @@
   "displayName": "Harness",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "internal",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "private": true,
   "icon": "media/icon.png",
   "repository": {
@@ -45,10 +45,6 @@
       {
         "command": "harness.newSession",
         "title": "Harness: New Session"
-      },
-      {
-        "command": "harness.ping",
-        "title": "Harness: Ping (debug)"
       }
     ],
     "configuration": {

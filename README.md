@@ -45,16 +45,14 @@ Everything is entered in the panel; you never have to edit `settings.json`.
    | Resource group | usually `default` |
    | Deployment ID | the deployment serving your model |
 
-4. Close settings (✕) and send a message.
+4. Click **Test connection**. It sends one trivial message and reports back
+   inline, so you know credentials, endpoint, and streaming all work before you
+   start a real task rather than finding out midway through one.
+5. Close settings (✕) and send a message.
 
 The client secret is stored in your OS keychain via the editor's SecretStorage,
 not in `settings.json`. The other values are plain configuration and are written
 to your workspace settings.
-
-**Verify the connection first.** Before relying on it, run
-`Cmd/Ctrl+Shift+P` → **Harness: Ping (debug)**. It sends one trivial message and
-writes the result to the "Harness" output channel, so you can confirm auth and
-streaming work against your deployment before starting real work.
 
 ## Using it
 
@@ -102,18 +100,3 @@ Most people never need these — the settings panel covers the common ones.
 
 The client secret is deliberately absent from this table — it lives in
 SecretStorage and has no `settings.json` key.
-
-## Development
-
-```sh
-npm install
-npm run build      # bundle the extension with esbuild
-npm run watch      # rebuild on change
-npm run typecheck
-npm test           # node:test; most modules run without a vscode host
-npm run package    # produces harness-<version>.vsix via vsce
-```
-
-Press `F5` to launch an Extension Development Host for anything that needs the
-real `vscode` API — webview rendering, `WorkspaceEdit`, and live streaming
-against a deployment.

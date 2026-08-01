@@ -259,6 +259,13 @@ function renderSettingsPanel() {
 
   el("clientSecretHint").style.display = state.config?.hasClientSecret ? "" : "none";
 
+  const test = state.connectionTest ?? { state: "idle" };
+  const statusEl = el("connectionStatus");
+  statusEl.className = `settings-status ${test.state}`;
+  statusEl.textContent =
+    test.state === "testing" ? "Testing…" : test.state === "idle" ? "" : test.message || "";
+  el("testConnectionBtn").disabled = test.state === "testing";
+
   if (settingsOpen && !settingsPopulated) {
     el("clientIdInput").value = state.config?.clientId || "";
     el("clientSecretInput").value = "";
@@ -356,6 +363,8 @@ el("clientSecretInput").addEventListener("change", (e) => {
   const value = e.target.value.trim();
   if (value) vscode.postMessage({ type: "updateSecret", value });
 });
+
+el("testConnectionBtn").addEventListener("click", () => vscode.postMessage({ type: "testConnection" }));
 
 el("openSettingsJsonLink").addEventListener("click", (e) => {
   e.preventDefault();
