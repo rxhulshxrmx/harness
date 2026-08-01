@@ -308,26 +308,39 @@ el("input").addEventListener("keydown", (e) => {
     send();
   }
 });
-el("newSessionBtn").addEventListener("click", () => vscode.postMessage({ type: "newSession" }));
+function closeSettings() {
+  settingsOpen = false;
+  renderSettingsPanel();
+}
+function closeHistory() {
+  historyOpen = false;
+  renderHistoryPanel();
+}
+
+el("newSessionBtn").addEventListener("click", () => {
+  closeSettings();
+  closeHistory();
+  vscode.postMessage({ type: "newSession" });
+});
 el("historyBtn").addEventListener("click", (e) => {
   e.stopPropagation();
+  closeSettings();
   historyOpen = !historyOpen;
   renderHistoryPanel();
 });
 document.addEventListener("click", (e) => {
   if (historyOpen && !el("historyPanel").contains(e.target) && e.target !== el("historyBtn")) {
-    historyOpen = false;
-    renderHistoryPanel();
+    closeHistory();
   }
 });
 el("approvalModeBtn").addEventListener("click", () => vscode.postMessage({ type: "toggleApprovalMode" }));
 
 el("settingsBtn").addEventListener("click", () => {
-  historyOpen = false;
+  closeHistory();
   settingsOpen = !settingsOpen;
-  renderHistoryPanel();
   renderSettingsPanel();
 });
+el("closeSettingsBtn").addEventListener("click", () => closeSettings());
 function wireSettingField(inputId, key) {
   el(inputId).addEventListener("change", (e) =>
     vscode.postMessage({ type: "updateSetting", key, value: e.target.value.trim() }),

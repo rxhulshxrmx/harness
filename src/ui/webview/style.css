@@ -82,6 +82,7 @@ button {
   min-height: 0;
 }
 #settingsPanel.open { display: flex; }
+.settings-panel-header { display: flex; align-items: center; justify-content: space-between; }
 .settings-section-title { font-weight: 600; font-size: 0.95em; }
 .settings-field { display: flex; flex-direction: column; gap: 4px; }
 .settings-field label { font-size: 0.85em; color: var(--h-muted); }
