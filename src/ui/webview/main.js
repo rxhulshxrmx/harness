@@ -302,6 +302,7 @@ function renderMessages() {
   if (state.streamingText) {
     const div = document.createElement("div");
     div.className = "msg assistant";
+    div.id = "streamingMsg";
     div.appendChild(renderMarkdown(state.streamingText));
     messagesEl.appendChild(div);
   }
@@ -627,10 +628,30 @@ el("openSettingsJsonLink").addEventListener("click", (e) => {
   vscode.postMessage({ type: "openSettingsJson" });
 });
 
+// Repaint only the in-progress reply. renderMessages() tears down and rebuilds
+// every message in the conversation, re-parsing markdown and re-highlighting
+// every code block, so driving it from the stream made cost grow with session
+// length rather than with the reply being typed.
+function renderStreaming() {
+  const existing = el("streamingMsg");
+  if (!existing) {
+    // First delta of a turn: the node does not exist yet, so fall back to a
+    // full render once to create it.
+    renderMessages();
+    return;
+  }
+  existing.replaceChildren(renderMarkdown(state.streamingText));
+  const messagesEl = el("messages");
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
 window.addEventListener("message", (event) => {
   if (event.data.type === "state") {
     state = event.data;
     render();
+  } else if (event.data.type === "stream") {
+    state.streamingText = event.data.text;
+    renderStreaming();
   }
 });
 
