@@ -45,14 +45,24 @@ export async function runTool(name: string, argsJson: string, ctx: ToolContext):
   }
 }
 
-// Shared .gitignore + .coupletignore loader used by any tool that walks or
-// gates access to workspace paths (list_dir, grep, read_file, search_replace).
-// .coupletignore lets a project exclude paths from agent tool access without
-// touching .gitignore (e.g. to keep secrets or generated files out of the
-// agent's reach even when they're tracked in git).
+// Directories no tool may walk or search, independent of .gitignore. Both the
+// current and the pre-rename data directory are listed on purpose: session
+// transcripts and checkpoints store verbatim file contents and tool output, so
+// a leftover .couplet/ or .harness/ from an earlier version must stay just as
+// unreadable as the current one. Dropping the old name here would let the
+// agent grep its own history for exactly the secrets these entries exist to
+// keep out of reach.
+export const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".couplet", ".harness"]);
+
+// Shared ignore-file loader used by any tool that walks or gates access to
+// workspace paths (list_dir, grep, read_file, search_replace). .coupletignore
+// lets a project exclude paths from agent tool access without touching
+// .gitignore (e.g. to keep secrets or generated files out of the agent's reach
+// even when they're tracked in git). The legacy .harnessignore is still read,
+// so a rename can't silently drop exclusions a user already relies on.
 export function loadWorkspaceIgnore(root: string): ReturnType<typeof ignore> {
   const ig = ignore();
-  for (const file of [".gitignore", ".coupletignore"]) {
+  for (const file of [".gitignore", ".coupletignore", ".harnessignore"]) {
     const filePath = path.join(root, file);
     if (fs.existsSync(filePath)) {
       ig.add(fs.readFileSync(filePath, "utf8"));

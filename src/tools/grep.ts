@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { registerTool, resolveWithinRoot, loadWorkspaceIgnore, type ToolContext } from "./index.ts";
+import { registerTool, resolveWithinRoot, loadWorkspaceIgnore, HARD_EXCLUDES, type ToolContext } from "./index.ts";
 import type { ToolSchema } from "../aicore/types.ts";
-
-const HARD_EXCLUDES = new Set([".git", "node_modules", "dist", "build", ".couplet"]);
 const MAX_FILE_BYTES = 1_000_000;
 
 export function searchInText(content: string, pattern: RegExp, filePath: string, maxResults: number): string[] {
