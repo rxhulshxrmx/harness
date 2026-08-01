@@ -3,7 +3,7 @@
   "displayName": "Couplet",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "sharma-so",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "license": "MIT",
   "icon": "media/icon.png",
   "engines": {

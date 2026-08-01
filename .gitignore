@@ -4,3 +4,7 @@ dist-check/
 *.vsix
 .couplet/
 .harness/
+.playwright-mcp/
+preview-test.html
+diff-check.png
+code-check.png

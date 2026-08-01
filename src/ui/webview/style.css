@@ -231,7 +231,48 @@ button {
   max-width: 100%;
 }
 .msg code { overflow-wrap: anywhere; }
+
+/* Diff blocks. Colours come from the theme's own git-decoration tokens, so
+   added/removed read the same here as they do in the Explorer and the diff
+   editor, in whatever theme is active. The tinted background does the
+   scanning work; the +/- glyph stays as the non-colour cue for anyone who
+   can't rely on hue. */
+.msg pre.diff { padding: 6px 0; }
+.msg pre.diff code { display: block; }
+.diff-line {
+  display: block;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-line.add {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #89d185) 14%, transparent);
+}
+.diff-line.del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f14c4c);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-deletedResourceForeground, #f14c4c) 14%, transparent);
+}
+.diff-line.hunk { color: var(--vscode-descriptionForeground); }
+.diff-line.meta { color: var(--vscode-descriptionForeground); font-weight: 600; }
 .msg pre code { padding: 0; background: none; }
+
+/* Syntax tokens. There is no theme variable for TextMate scopes, so these
+   borrow the closest semantic colours the workbench does expose — the debug
+   token and symbol-icon palettes — which track the active theme instead of
+   pinning one scheme. Fallbacks are Dark+ values. */
+.tok-comment,
+.tok-linecomment { color: var(--vscode-descriptionForeground, #6a9955); font-style: italic; }
+.tok-string { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+.tok-number { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
+.tok-keyword { color: var(--vscode-symbolIcon-keywordForeground, #569cd6); }
+.tok-fn { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
+
+/* Inline code that names a file in the workspace: clicking opens it in the
+   editor pane. Underlined on hover only, so a paragraph full of paths does not
+   turn into a wall of links. */
+.msg code.file-ref { cursor: pointer; color: var(--vscode-textLink-foreground); }
+.msg code.file-ref:hover { text-decoration: underline; }
 
 .tool-call {
   cursor: pointer;

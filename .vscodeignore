@@ -12,3 +12,7 @@ esbuild.mjs
 tsconfig.json
 package-lock.json
 **/*.map
+.playwright-mcp/**
+preview-test.html
+**/*.png
+!media/icon.png

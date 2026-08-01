@@ -17,11 +17,137 @@ let settingsOpen = false;
 let settingsPopulated = false;
 let modelPickerOpen = false;
 
+const DIFF_LANGS = new Set(["diff", "patch"]);
+
+// Models label a diff block inconsistently — ```diff, ```patch, or a bare
+// ``` — so fall back to sniffing the content when the fence carries no
+// language, rather than silently rendering a diff as flat grey text.
+function looksLikeDiff(lines) {
+  if (lines.some((l) => /^(@@|\+\+\+ |--- )/.test(l))) return true;
+  const marked = lines.filter((l) => /^[+-]/.test(l)).length;
+  return marked >= 2 && marked >= lines.length * 0.3;
+}
+
+function diffLineClass(line) {
+  // File headers before +/- so "--- a/file.ts" is not read as a deletion.
+  if (/^(\+\+\+|---)(\s|$)/.test(line)) return "meta";
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return "ctx";
+}
+
+// Syntax highlighting, hand-rolled. A real grammar engine (shiki, highlight.js)
+// would be megabytes of dependency for a sidebar that shows short snippets, so
+// this is a single-pass lexer: comments, strings, numbers, keywords and call
+// sites. It is deliberately approximate — the goal is that code stops reading
+// as one flat grey wall, not that it matches the editor token-for-token.
+const KW_JS =
+  "abstract as async await break case catch class const constructor continue debugger declare default delete do else enum export extends false finally for from function get if implements import in instanceof interface keyof let new null of private protected public readonly return satisfies set static super switch this throw true try type typeof undefined var void while yield";
+const KW_PY =
+  "and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return self True try while with yield";
+const KW_SH =
+  "case do done elif else esac exit export fi for function if in local read readonly return set then until unset while";
+const KW_C =
+  "auto bool break case catch chan char class const constexpr continue default defer delete do double else enum extern false final float fn for func go goto if impl implements import in int interface let long map match mod move mut namespace new nil nullptr package private protected pub public range return self short signed sizeof static struct super switch template this throw trait true try type typedef typename union unsigned use using var virtual void volatile where while";
+const KW_SQL =
+  "all alter and as asc between by case create cross delete desc distinct drop else end exists from full group having in inner insert into is join left like limit not null offset on or order outer right select set table then union update values when where with";
+
+function highlightMode(lang) {
+  switch (lang) {
+    case "js": case "jsx": case "mjs": case "cjs": case "javascript":
+    case "ts": case "tsx": case "typescript":
+    case "json": case "jsonc": case "json5":
+      return { key: "js", kw: KW_JS, line: "//", block: true, template: true };
+    case "py": case "python":
+      return { key: "py", kw: KW_PY, line: "#", block: false };
+    case "sh": case "bash": case "zsh": case "shell": case "console": case "shellscript":
+      return { key: "sh", kw: KW_SH, line: "#", block: false };
+    case "css": case "scss": case "less":
+      return { key: "css", kw: "important from to", line: "//", block: true };
+    case "sql":
+      return { key: "sql", kw: KW_SQL, line: "--", block: true, ci: true };
+    case "yaml": case "yml": case "toml": case "ini": case "env": case "dotenv":
+      return { key: "data", kw: "false null true yes no on off", line: "#", block: false };
+    case "c": case "h": case "cc": case "cpp": case "hpp": case "cs": case "java":
+    case "kt": case "kotlin": case "swift": case "go": case "rs": case "rust":
+    case "php": case "rb": case "ruby": case "dart": case "scala":
+      return { key: "c", kw: KW_C, line: "//", block: true };
+    default:
+      // Unlabelled fences are the common case mid-stream. Accept both comment
+      // styles and the union of keywords rather than giving up and rendering
+      // flat text — over-colouring a word is a smaller cost than no colour.
+      return { key: "generic", kw: `${KW_JS} ${KW_PY} ${KW_C}`, line: "//|#", block: true, template: true };
+  }
+}
+
+const scannerCache = new Map();
+
+function scannerFor(mode) {
+  const cached = scannerCache.get(mode.key);
+  if (cached) return cached;
+  const parts = [];
+  // Order matters: whatever opens first wins, so comments and strings must be
+  // tried before keywords, or a keyword inside a string would be coloured.
+  if (mode.block) parts.push("(?<comment>/\\*[\\s\\S]*?\\*/)");
+  parts.push(`(?<linecomment>(?:${mode.line})[^\\n]*)`);
+  const tick = mode.template ? "|`(?:[^`\\\\]|\\\\[\\s\\S])*`" : "";
+  parts.push(`(?<string>"(?:[^"\\\\\\n]|\\\\.)*"|'(?:[^'\\\\\\n]|\\\\.)*'${tick})`);
+  parts.push("(?<number>\\b\\d[\\w.]*)");
+  parts.push(`(?<keyword>\\b(?:${mode.kw.trim().split(/\s+/).join("|")})\\b)`);
+  parts.push("(?<fn>\\b[A-Za-z_$][\\w$]*(?=\\s*\\())");
+  const re = new RegExp(parts.join("|"), mode.ci ? "gi" : "g");
+  scannerCache.set(mode.key, re);
+  return re;
+}
+
+function highlightInto(codeEl, text, lang) {
+  const re = scannerFor(highlightMode(lang));
+  re.lastIndex = 0;
+  let last = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    // A zero-length match would spin forever; step past it.
+    if (match[0].length === 0) { re.lastIndex++; continue; }
+    if (match.index > last) codeEl.appendChild(document.createTextNode(text.slice(last, match.index)));
+    const kind = Object.keys(match.groups).find((k) => match.groups[k] !== undefined);
+    const span = document.createElement("span");
+    span.className = `tok-${kind}`;
+    span.textContent = match[0];
+    codeEl.appendChild(span);
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) codeEl.appendChild(document.createTextNode(text.slice(last)));
+}
+
+function appendCodeBlock(container, bufLines, lang) {
+  const pre = document.createElement("pre");
+  const code = document.createElement("code");
+
+  if (DIFF_LANGS.has(lang) || (!lang && looksLikeDiff(bufLines))) {
+    pre.className = "diff";
+    for (const line of bufLines) {
+      const span = document.createElement("span");
+      span.className = `diff-line ${diffLineClass(line)}`;
+      // A blank line still needs to occupy a row, or the diff loses its shape.
+      span.textContent = line === "" ? " " : line;
+      code.appendChild(span);
+    }
+  } else {
+    pre.className = "code";
+    highlightInto(code, bufLines.join("\n"), lang);
+  }
+
+  pre.appendChild(code);
+  container.appendChild(pre);
+}
+
 function renderMarkdown(text) {
   const container = document.createElement("div");
   const lines = text.split("\n");
   let inCode = false;
   let codeBuf = [];
+  let codeLang = "";
   let listBuf = null;
 
   function flushList() {
@@ -31,15 +157,13 @@ function renderMarkdown(text) {
   for (const line of lines) {
     if (line.startsWith("```")) {
       if (inCode) {
-        const pre = document.createElement("pre");
-        const code = document.createElement("code");
-        code.textContent = codeBuf.join("\n");
-        pre.appendChild(code);
-        container.appendChild(pre);
+        appendCodeBlock(container, codeBuf, codeLang);
         codeBuf = [];
+        codeLang = "";
         inCode = false;
       } else {
         flushList();
+        codeLang = line.slice(3).trim().toLowerCase();
         inCode = true;
       }
       continue;
@@ -68,15 +192,49 @@ function renderMarkdown(text) {
     container.appendChild(p);
   }
   flushList();
+  // A fence that never closed — the normal state mid-stream, before the
+  // closing ``` arrives. Render what we have, or the block stays blank until
+  // the model finishes writing it.
+  if (inCode && codeBuf.length) appendCodeBlock(container, codeBuf, codeLang);
   return container;
+}
+
+// A workspace-relative path, optionally with :line or :line:col. Restricted to
+// known code extensions so that prose like `node.js` or `v0.0.13` stays plain
+// text; absolute paths and URLs are excluded because the extension side would
+// refuse them anyway.
+const FILE_REF_RE =
+  /^(?!\/)([\w.@~-]+(?:\/[\w.@~-]+)*\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|css|scss|less|html|htm|xml|yml|yaml|toml|ini|md|sql|vue|svelte|txt|lock|gradle))(?::(\d+))?(?::\d+)?$/i;
+
+// Library names shaped exactly like a bare .js file. Only a problem when the
+// reference has no directory part, since nobody writes `src/node.js` meaning
+// the runtime.
+const NOT_A_FILE = new Set([
+  "node.js", "next.js", "nest.js", "nuxt.js", "vue.js", "react.js", "express.js",
+  "three.js", "d3.js", "chart.js", "ember.js", "backbone.js", "socket.io",
+]);
+
+function fileRef(text) {
+  const match = FILE_REF_RE.exec(text.trim());
+  if (!match) return null;
+  const file = match[1];
+  if (!file.includes("/") && NOT_A_FILE.has(file.toLowerCase())) return null;
+  return { file, line: match[2] ? Number(match[2]) : undefined };
 }
 
 function appendInline(parent, text) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
   for (const part of parts) {
     if (part.startsWith("`") && part.endsWith("`")) {
+      const inner = part.slice(1, -1);
       const code = document.createElement("code");
-      code.textContent = part.slice(1, -1);
+      code.textContent = inner;
+      const ref = fileRef(inner);
+      if (ref) {
+        code.className = "file-ref";
+        code.title = `Open ${ref.file}${ref.line ? `:${ref.line}` : ""}`;
+        code.addEventListener("click", () => vscode.postMessage({ type: "openFile", ...ref }));
+      }
       parent.appendChild(code);
     } else if (part.startsWith("**") && part.endsWith("**")) {
       const b = document.createElement("b");

@@ -6,7 +6,7 @@ import { createSession, type Session } from "../state/session.ts";
 import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, deleteSession } from "../state/store.ts";
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
-import { getWorkspaceRoot } from "../tools/index.ts";
+import { getWorkspaceRoot, resolveWithinRoot } from "../tools/index.ts";
 import { chat, CLIENT_SECRET_KEY } from "../aicore/client.ts";
 import { classifyError } from "../aicore/errors.ts";
 import { listDeployments, type Deployment } from "../aicore/models.ts";
@@ -319,6 +319,33 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         const current = cfg.get<string>("approvalMode", "ask");
         await cfg.update("approvalMode", current === "ask" ? "auto" : "ask", vscode.ConfigurationTarget.Workspace);
         this.postState();
+        break;
+      }
+      case "openFile": {
+        // The path here originates in model output, so it is untrusted: run it
+        // through the same containment check the tools use before handing it to
+        // the editor, or a crafted reply could get the user to open anything on
+        // disk with one click.
+        const root = this.tryGetWorkspaceRoot();
+        if (!root || typeof msg.file !== "string") break;
+        let abs: string;
+        try {
+          abs = resolveWithinRoot(root, msg.file);
+        } catch {
+          vscode.window.showErrorMessage(`Couplet: refused to open a path outside the workspace: ${msg.file}`);
+          break;
+        }
+        try {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
+          const line = Number.isInteger(msg.line) && msg.line > 0 ? Math.min(msg.line - 1, doc.lineCount - 1) : undefined;
+          await vscode.window.showTextDocument(doc, {
+            preview: false,
+            viewColumn: vscode.ViewColumn.Active,
+            selection: line === undefined ? undefined : new vscode.Range(line, 0, line, 0),
+          });
+        } catch {
+          vscode.window.showInformationMessage(`Couplet: could not open ${msg.file}`);
+        }
         break;
       }
       case "openDiff":
