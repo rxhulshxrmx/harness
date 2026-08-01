@@ -15,6 +15,7 @@ let state = {
 let historyOpen = false;
 let settingsOpen = false;
 let settingsPopulated = false;
+let modelPickerOpen = false;
 
 function renderMarkdown(text) {
   const container = document.createElement("div");
@@ -278,12 +279,71 @@ function renderSettingsPanel() {
   if (!settingsOpen) settingsPopulated = false;
 }
 
+function renderModelPicker() {
+  const picker = el("modelPicker");
+  picker.innerHTML = "";
+  picker.classList.toggle("open", modelPickerOpen);
+  if (!modelPickerOpen) return;
+
+  const models = state.models ?? { state: "idle", list: [] };
+
+  const message = (text, withSettingsLink) => {
+    const div = document.createElement("div");
+    div.className = "model-message";
+    div.appendChild(document.createTextNode(text));
+    if (withSettingsLink) {
+      div.appendChild(document.createElement("br"));
+      const link = document.createElement("a");
+      link.textContent = "Open settings";
+      link.addEventListener("click", () => {
+        modelPickerOpen = false;
+        settingsOpen = true;
+        renderModelPicker();
+        renderSettingsPanel();
+      });
+      div.appendChild(link);
+    }
+    picker.appendChild(div);
+  };
+
+  if (models.state === "loading") return message("Loading models…");
+  if (models.state === "error") return message(models.message || "Could not load models.", true);
+  if (!models.list.length) {
+    return message(models.message || "No models loaded yet. Add your credentials, then test the connection.", true);
+  }
+
+  for (const model of models.list) {
+    const row = document.createElement("div");
+    row.className = "model-row";
+    if (model.id === state.config?.deploymentId) row.classList.add("active");
+
+    const check = document.createElement("span");
+    check.className = "check";
+    check.textContent = "✓";
+    row.appendChild(check);
+
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = model.label;
+    label.title = `${model.label} — deployment ${model.id}`;
+    row.appendChild(label);
+
+    row.addEventListener("click", () => {
+      modelPickerOpen = false;
+      renderModelPicker();
+      vscode.postMessage({ type: "selectModel", deploymentId: model.id });
+    });
+    picker.appendChild(row);
+  }
+}
+
 function render() {
   el("sessionTitle").textContent = state.session.title || "New session";
   renderMessages();
   renderTouchedFiles();
   renderHistoryPanel();
   renderSettingsPanel();
+  renderModelPicker();
 
   const modeBtn = el("approvalModeBtn");
   modeBtn.textContent = state.approvalMode === "auto" ? "Auto" : "Ask";
@@ -297,6 +357,19 @@ function render() {
     : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V3.5M3.5 8 8 3.5 12.5 8"/></svg>';
 }
 
+const INPUT_MIN_HEIGHT = 68;
+const INPUT_MAX_HEIGHT = 260;
+
+// Grow the composer upward with the message so a long prompt stays readable,
+// falling back to scrolling only past INPUT_MAX_HEIGHT. Height must be reset
+// to "auto" first, or scrollHeight can only ever report the current height
+// and the box would never shrink back down.
+function autoGrowInput() {
+  const input = el("input");
+  input.style.height = "auto";
+  input.style.height = `${Math.min(Math.max(input.scrollHeight, INPUT_MIN_HEIGHT), INPUT_MAX_HEIGHT)}px`;
+}
+
 function send() {
   const input = el("input");
   if (state.streaming) {
@@ -306,9 +379,11 @@ function send() {
   if (!input.value.trim()) return;
   vscode.postMessage({ type: "userSend", text: input.value });
   input.value = "";
+  autoGrowInput();
 }
 
 el("sendBtn").addEventListener("click", send);
+el("input").addEventListener("input", autoGrowInput);
 el("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -323,15 +398,34 @@ function closeHistory() {
   historyOpen = false;
   renderHistoryPanel();
 }
+function closeModelPicker() {
+  modelPickerOpen = false;
+  renderModelPicker();
+}
+
+el("modelBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeHistory();
+  modelPickerOpen = !modelPickerOpen;
+  renderModelPicker();
+  // Load on first open rather than up front, so a workspace with no
+  // credentials never fires a doomed request on startup.
+  const models = state.models ?? { state: "idle", list: [] };
+  if (modelPickerOpen && models.state === "idle") {
+    vscode.postMessage({ type: "refreshModels" });
+  }
+});
 
 el("newSessionBtn").addEventListener("click", () => {
   closeSettings();
   closeHistory();
+  closeModelPicker();
   vscode.postMessage({ type: "newSession" });
 });
 el("historyBtn").addEventListener("click", (e) => {
   e.stopPropagation();
   closeSettings();
+  closeModelPicker();
   historyOpen = !historyOpen;
   renderHistoryPanel();
 });
@@ -339,11 +433,15 @@ document.addEventListener("click", (e) => {
   if (historyOpen && !el("historyPanel").contains(e.target) && e.target !== el("historyBtn")) {
     closeHistory();
   }
+  if (modelPickerOpen && !el("modelPicker").contains(e.target) && !el("modelBtn").contains(e.target)) {
+    closeModelPicker();
+  }
 });
 el("approvalModeBtn").addEventListener("click", () => vscode.postMessage({ type: "toggleApprovalMode" }));
 
 el("settingsBtn").addEventListener("click", () => {
   closeHistory();
+  closeModelPicker();
   settingsOpen = !settingsOpen;
   renderSettingsPanel();
 });

@@ -14,7 +14,7 @@ export const CLIENT_SECRET_KEY = "harness.clientSecret";
 // how SAP AI Core credentials are actually issued — rather than requiring a
 // path to a downloaded service-key JSON file. Only the secret goes through
 // SecretStorage; the rest are plain (non-secret) identifiers/URLs.
-async function loadServiceKey(): Promise<ServiceKey> {
+export async function loadServiceKey(): Promise<ServiceKey> {
   const vscode = require("vscode");
   const cfg = vscode.workspace.getConfiguration("harness");
   const clientid = cfg.get<string>("clientId", "");
@@ -28,7 +28,7 @@ async function loadServiceKey(): Promise<ServiceKey> {
   return { clientid, clientsecret, url, serviceurls: { AI_API_URL } };
 }
 
-function readConfig() {
+export function readConfig() {
   const vscode = require("vscode");
   const cfg = vscode.workspace.getConfiguration("harness");
   return {

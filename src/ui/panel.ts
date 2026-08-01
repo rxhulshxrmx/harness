@@ -9,6 +9,7 @@ import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
 import { chat, CLIENT_SECRET_KEY } from "../aicore/client.ts";
 import { classifyError } from "../aicore/errors.ts";
+import { listDeployments, type Deployment } from "../aicore/models.ts";
 
 interface PendingApproval {
   id: string;
@@ -27,6 +28,10 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
   private controller: AbortController | null = null;
   private sessionList: { id: string; title: string }[] = [];
   private connectionTest: { state: "idle" | "testing" | "ok" | "error"; message?: string } = { state: "idle" };
+  private models: { state: "idle" | "loading" | "ready" | "error"; list: Deployment[]; message?: string } = {
+    state: "idle",
+    list: [],
+  };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -122,7 +127,41 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         hasClientSecret,
       },
       connectionTest: this.connectionTest,
+      models: this.models,
     });
+  }
+
+  /**
+   * Lists the RUNNING deployments in the configured resource group, which is
+   * what "available models" means for SAP AI Core — you can only talk to a
+   * model someone has deployed, and the deployment id is what routes the
+   * request. Picking a model therefore sets deploymentId, not just a label.
+   */
+  private async refreshModels() {
+    if (this.models.state === "loading") return;
+    this.models = { state: "loading", list: this.models.list };
+    this.postState();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const list = await listDeployments(controller.signal);
+      this.models = {
+        state: "ready",
+        list,
+        message: list.length ? undefined : "No running deployments found in this resource group.",
+      };
+    } catch (err) {
+      const classified = classifyError(err);
+      this.models = {
+        state: "error",
+        list: [],
+        message: classified.category === "aborted" ? "Timed out after 30s." : classified.message,
+      };
+    } finally {
+      clearTimeout(timeout);
+      this.postState();
+    }
   }
 
   /**
@@ -253,8 +292,25 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         break;
       }
       case "testConnection":
-        if (this.connectionTest.state !== "testing") await this.testConnection();
+        if (this.connectionTest.state !== "testing") {
+          await this.testConnection();
+          // Credentials just proved good, so the model list is now fetchable —
+          // load it here rather than making the user go find it.
+          if (this.connectionTest.state === "ok") await this.refreshModels();
+        }
         break;
+      case "refreshModels":
+        await this.refreshModels();
+        break;
+      case "selectModel": {
+        const chosen = this.models.list.find((d) => d.id === msg.deploymentId);
+        if (!chosen) break;
+        const cfg = vscode.workspace.getConfiguration("harness");
+        await cfg.update("deploymentId", chosen.id, vscode.ConfigurationTarget.Workspace);
+        await cfg.update("model", chosen.label, vscode.ConfigurationTarget.Workspace);
+        this.postState();
+        break;
+      }
       case "openSettingsJson":
         vscode.commands.executeCommand("workbench.action.openWorkspaceSettingsJson");
         break;
