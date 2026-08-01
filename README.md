@@ -19,8 +19,8 @@ You need one file: `couplet-<version>.vsix`. Pick whichever is easier.
 **From a terminal:**
 
 ```sh
-code --install-extension couplet-0.0.12.vsix     # VS Code
-cursor --install-extension couplet-0.0.12.vsix   # Cursor
+code --install-extension couplet-0.0.15.vsix     # VS Code
+cursor --install-extension couplet-0.0.15.vsix   # Cursor
 ```
 
 Then reload the window.
