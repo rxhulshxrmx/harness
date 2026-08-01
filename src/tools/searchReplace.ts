@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type * as vscodeTypes from "vscode";
 import { registerTool, resolveWithinRoot, isIgnoredPath, type ToolContext } from "./index.ts";
+import { revealEdit } from "./revealEdit.ts";
 import { diffTracker } from "../state/diffTracker.ts";
 import { isStale, recordRead } from "../state/fileTracker.ts";
 import type { ToolSchema } from "../aicore/types.ts";
@@ -128,6 +129,7 @@ registerTool("search_replace", {
     const doc = await vscode.workspace.openTextDocument(uri);
     await doc.save();
     recordRead(abs);
+    await revealEdit(uri, plan.content!, args.new_string);
 
     if (plan.kind === "create") return `Created ${args.file_path}`;
     return `Updated ${args.file_path}:\n${contextSnippet(plan.content!, args.new_string)}`;

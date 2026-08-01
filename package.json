@@ -3,7 +3,7 @@
   "displayName": "Couplet",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "sharma-so",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "license": "MIT",
   "icon": "media/icon.png",
   "engines": {
@@ -87,6 +87,11 @@
         "couplet.contextBudget": {
           "type": "number",
           "default": 100000
+        },
+        "couplet.revealEdits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open each file the agent edits in the editor and scroll to the change. Focus stays in the chat."
         }
       }
     }

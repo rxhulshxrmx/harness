@@ -261,11 +261,13 @@ function renderMessages() {
       rewindBtn.textContent = "⟲";
       rewindBtn.title = "Rewind to before this turn";
       rewindBtn.addEventListener("click", () => vscode.postMessage({ type: "rewindToTurn", turnIndex: currentTurn }));
-      div.appendChild(rewindBtn);
       const bubble = document.createElement("div");
       bubble.className = "bubble";
       bubble.textContent = msg.content;
+      // Block first, rewind after it: the block now starts at the left edge, so
+      // a leading button would push it out of alignment with everything else.
       div.appendChild(bubble);
+      div.appendChild(rewindBtn);
       messagesEl.appendChild(div);
     } else if (msg.role === "assistant") {
       if (msg.content) {

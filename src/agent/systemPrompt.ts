@@ -1,13 +1,18 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import type { Session } from "../state/session.ts";
 import type { Message } from "../aicore/types.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
+import { resolveShell, shellGuidance } from "../tools/shell.ts";
 import { loadAgentsMd } from "./agentsMd.ts";
 
 export function systemMessage(session: Session): Message {
   const workspaceRoot = getWorkspaceRoot();
   const platform = os.platform();
-  const shell = process.env.SHELL ?? (platform === "win32" ? "powershell.exe" : "/bin/bash");
+  // Resolved the same way bash.ts resolves it, so the prompt cannot promise a
+  // syntax the executor will not accept.
+  const shellInfo = resolveShell(platform, process.env, fs.existsSync);
+  const shell = shellInfo.label;
   const date = new Date().toISOString().slice(0, 10);
   const agentsMd = loadAgentsMd(workspaceRoot);
 
@@ -20,7 +25,7 @@ Environment:
 - Platform: ${platform}
 - Shell: ${shell}
 - Today: ${date}
-
+${shellGuidance(shellInfo)}
 How to work:
 - Before editing any file, read it first. Never edit content you have not seen this
   session.

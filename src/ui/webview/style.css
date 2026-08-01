@@ -200,18 +200,25 @@ button {
   min-width: 0;
 }
 
+/* The user's own turn, as a full-width block with a leading rule rather than a
+   chat bubble. The fill and the rule are both mixed from the foreground, not
+   from a surface token: button.secondaryBackground is undefined in some themes
+   and --h-surface then falls through to a value identical to the pane
+   background, which rendered the block invisible — the same failure the
+   composer divider had. */
 .msg.user {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-end;
   gap: 4px;
-  text-align: right;
+  text-align: left;
 }
 .msg.user .bubble {
-  background: var(--h-surface);
-  border-radius: var(--h-radius-md);
-  padding: 6px 10px;
-  max-width: 88%;
+  flex: 1;
+  min-width: 0;
+  background: color-mix(in srgb, var(--vscode-foreground) 7%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--vscode-foreground) 34%, transparent);
+  border-radius: 0 var(--h-radius-md) var(--h-radius-md) 0;
+  padding: 7px 10px;
 }
 .msg.user .rewind-btn {
   visibility: hidden;

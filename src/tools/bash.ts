@@ -1,5 +1,7 @@
 import { spawn, execSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as os from "node:os";
+import { resolveShell } from "./shell.ts";
 import type * as vscodeTypes from "vscode";
 import { registerTool, type ToolContext } from "./index.ts";
 import { diffTracker } from "../state/diffTracker.ts";
@@ -7,6 +9,15 @@ import { classifyCommand } from "./commandPolicy.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
+
+// Resolving the shell walks PATH, so do it once rather than per command. The
+// system prompt reads the same value, so what the model is told matches what
+// actually runs.
+let cachedShell: ReturnType<typeof resolveShell> | null = null;
+export function getShell() {
+  cachedShell ??= resolveShell(os.platform(), process.env, fs.existsSync);
+  return cachedShell;
+}
 
 function recordGitTouchedFiles(workspaceRoot: string) {
   try {
@@ -57,9 +68,8 @@ registerTool("bash", {
     }
 
     return new Promise<string>((resolve) => {
-      const isWin = os.platform() === "win32";
       const child = spawn(command, {
-        shell: isWin ? "powershell.exe" : true,
+        shell: getShell().spawnShell,
         cwd: ctx.workspaceRoot,
       });
 
