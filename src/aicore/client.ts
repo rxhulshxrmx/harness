@@ -1,22 +1,37 @@
-import * as fs from "node:fs";
 import type * as vscodeTypes from "vscode";
 import { getToken, invalidateToken } from "./auth.ts";
 import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse.ts";
 import { HttpError } from "./errors.ts";
+import { getSecrets } from "./context.ts";
 import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from "./types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
 
-function loadServiceKey(keyPath: string): ServiceKey {
-  if (!keyPath) throw new Error("harness.serviceKeyPath is not set.");
-  return JSON.parse(fs.readFileSync(keyPath, "utf8"));
+export const CLIENT_SECRET_KEY = "harness.clientSecret";
+
+// Credentials are entered as separate fields (Client ID, Client Secret, AI
+// Core Base URL, Auth URL, Resource Group) in the settings panel, matching
+// how SAP AI Core credentials are actually issued — rather than requiring a
+// path to a downloaded service-key JSON file. Only the secret goes through
+// SecretStorage; the rest are plain (non-secret) identifiers/URLs.
+async function loadServiceKey(): Promise<ServiceKey> {
+  const vscode = require("vscode");
+  const cfg = vscode.workspace.getConfiguration("harness");
+  const clientid = cfg.get<string>("clientId", "");
+  const url = cfg.get<string>("tokenUrl", "");
+  const AI_API_URL = cfg.get<string>("aiCoreBaseUrl", "");
+  const clientsecret = (await getSecrets().get(CLIENT_SECRET_KEY)) ?? "";
+
+  if (!clientid || !clientsecret || !url || !AI_API_URL) {
+    throw new Error("SAP AI Core credentials are not fully set — open Harness settings (gear icon) to add them.");
+  }
+  return { clientid, clientsecret, url, serviceurls: { AI_API_URL } };
 }
 
 function readConfig() {
   const vscode = require("vscode");
   const cfg = vscode.workspace.getConfiguration("harness");
   return {
-    serviceKeyPath: cfg.get<string>("serviceKeyPath", ""),
     deploymentId: cfg.get<string>("deploymentId", ""),
     resourceGroup: cfg.get<string>("resourceGroup", "default"),
     apiVersion: cfg.get<string>("apiVersion", "2024-10-21"),
@@ -29,8 +44,8 @@ export async function chat(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<AssistantMessage> {
-  const { serviceKeyPath, deploymentId, resourceGroup, apiVersion } = readConfig();
-  const key = loadServiceKey(serviceKeyPath);
+  const { deploymentId, resourceGroup, apiVersion } = readConfig();
+  const key = await loadServiceKey();
   const url = `${key.serviceurls.AI_API_URL}/v2/inference/deployments/${deploymentId}/chat/completions?api-version=${apiVersion}`;
 
   let attempt = 0;

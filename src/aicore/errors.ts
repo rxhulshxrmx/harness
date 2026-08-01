@@ -34,7 +34,7 @@ export function classifyError(err: unknown): ClassifiedError {
 
   if (err instanceof HttpError) {
     if (err.status === 401) {
-      return { category: "auth", message: "Authentication failed — check harness.serviceKeyPath.", retryable: false };
+      return { category: "auth", message: "Authentication failed — check your SAP AI Core credentials in Harness settings.", retryable: false };
     }
     if (err.status === 429) {
       return { category: "rate_limit", message: "Rate limited by the model provider.", retryable: true };

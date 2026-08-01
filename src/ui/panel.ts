@@ -7,6 +7,7 @@ import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, dele
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot } from "../tools/index.ts";
+import { CLIENT_SECRET_KEY } from "../aicore/client.ts";
 
 interface PendingApproval {
   id: string;
@@ -25,7 +26,10 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
   private controller: AbortController | null = null;
   private sessionList: { id: string; title: string }[] = [];
 
-  constructor(private readonly extensionUri: vscode.Uri) {
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly secrets: vscode.SecretStorage,
+  ) {
     this.sessionList = this.tryListSessions().map(({ id, title }) => ({ id, title }));
     this.session = createSession("", "");
     this.session.filePath = this.tryCreateSessionFilePath(this.session);
@@ -87,7 +91,9 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
       .replaceAll("{{scriptUri}}", scriptUri.toString());
   }
 
-  private postState() {
+  private async postState() {
+    const cfg = vscode.workspace.getConfiguration("harness");
+    const hasClientSecret = !!(await this.secrets.get(CLIENT_SECRET_KEY));
     this.view?.webview.postMessage({
       type: "state",
       session: this.session,
@@ -103,8 +109,16 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         : null,
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
-      approvalMode: vscode.workspace.getConfiguration("harness").get<string>("approvalMode", "ask"),
-      model: vscode.workspace.getConfiguration("harness").get<string>("model", "") || "GPT-5",
+      approvalMode: cfg.get<string>("approvalMode", "ask"),
+      model: cfg.get<string>("model", "") || "GPT-5",
+      config: {
+        clientId: cfg.get<string>("clientId", ""),
+        aiCoreBaseUrl: cfg.get<string>("aiCoreBaseUrl", ""),
+        tokenUrl: cfg.get<string>("tokenUrl", ""),
+        resourceGroup: cfg.get<string>("resourceGroup", "default"),
+        deploymentId: cfg.get<string>("deploymentId", ""),
+        hasClientSecret,
+      },
     });
   }
 
@@ -182,6 +196,26 @@ export class HarnessPanel implements vscode.WebviewViewProvider {
         this.postState();
         break;
       }
+      case "updateSetting": {
+        const allowedKeys = new Set(["deploymentId", "clientId", "aiCoreBaseUrl", "tokenUrl", "resourceGroup"]);
+        if (allowedKeys.has(msg.key)) {
+          await vscode.workspace
+            .getConfiguration("harness")
+            .update(msg.key, msg.value, vscode.ConfigurationTarget.Workspace);
+          this.postState();
+        }
+        break;
+      }
+      case "updateSecret": {
+        if (typeof msg.value === "string" && msg.value.length > 0) {
+          await this.secrets.store(CLIENT_SECRET_KEY, msg.value);
+          this.postState();
+        }
+        break;
+      }
+      case "openSettingsJson":
+        vscode.commands.executeCommand("workbench.action.openWorkspaceSettingsJson");
+        break;
       case "toggleApprovalMode": {
         const cfg = vscode.workspace.getConfiguration("harness");
         const current = cfg.get<string>("approvalMode", "ask");

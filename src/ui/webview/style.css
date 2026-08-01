@@ -70,6 +70,34 @@ button {
 .icon-btn:hover { background: var(--h-surface-hover); color: var(--vscode-foreground); }
 .icon-btn svg { width: 15px; height: 15px; }
 
+/* Settings panel */
+
+#settingsPanel {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+#settingsPanel.open { display: flex; }
+.settings-section-title { font-weight: 600; font-size: 0.95em; }
+.settings-field { display: flex; flex-direction: column; gap: 4px; }
+.settings-field label { font-size: 0.85em; color: var(--h-muted); }
+.settings-field input {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--h-border));
+  border-radius: var(--h-radius-md);
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: inherit;
+}
+.settings-field input:focus { outline: none; border-color: var(--vscode-focusBorder); }
+.settings-hint { font-size: 0.82em; color: var(--h-muted); margin: 0; }
+.settings-hint a { color: var(--vscode-textLink-foreground); cursor: pointer; }
+
 /* Session history dropdown */
 
 #historyPanel {

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { chat } from "./aicore/client.ts";
+import { setExtensionContext } from "./aicore/context.ts";
 import { HarnessPanel } from "./ui/panel.ts";
 import { diffTracker, BeforeContentProvider } from "./state/diffTracker.ts";
 import "./tools/readFile.ts";
@@ -10,6 +11,7 @@ import "./tools/searchReplace.ts";
 import "./tools/bash.ts";
 
 export function activate(context: vscode.ExtensionContext) {
+  setExtensionContext(context);
   const output = vscode.window.createOutputChannel("Harness");
   context.subscriptions.push(output);
 
@@ -27,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  const panel = new HarnessPanel(context.extensionUri);
+  const panel = new HarnessPanel(context.extensionUri, context.secrets);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("harness.chat", panel));
 
   context.subscriptions.push(

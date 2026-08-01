@@ -10,8 +10,11 @@ let state = {
   approvalMode: "ask",
   model: "GPT-5",
   streaming: false,
+  config: { clientId: "", aiCoreBaseUrl: "", tokenUrl: "", resourceGroup: "", deploymentId: "", hasClientSecret: false },
 };
 let historyOpen = false;
+let settingsOpen = false;
+let settingsPopulated = false;
 
 function renderMarkdown(text) {
   const container = document.createElement("div");
@@ -247,11 +250,33 @@ function renderHistoryPanel() {
   }
 }
 
+function renderSettingsPanel() {
+  const panel = el("settingsPanel");
+  panel.classList.toggle("open", settingsOpen);
+  el("messages").style.display = settingsOpen ? "none" : "";
+  el("touchedFiles").style.display = settingsOpen ? "none" : "";
+  el("composerWrap").style.display = settingsOpen ? "none" : "";
+
+  el("clientSecretHint").style.display = state.config?.hasClientSecret ? "" : "none";
+
+  if (settingsOpen && !settingsPopulated) {
+    el("clientIdInput").value = state.config?.clientId || "";
+    el("clientSecretInput").value = "";
+    el("aiCoreBaseUrlInput").value = state.config?.aiCoreBaseUrl || "";
+    el("tokenUrlInput").value = state.config?.tokenUrl || "";
+    el("resourceGroupInput").value = state.config?.resourceGroup || "";
+    el("deploymentIdInput").value = state.config?.deploymentId || "";
+    settingsPopulated = true;
+  }
+  if (!settingsOpen) settingsPopulated = false;
+}
+
 function render() {
   el("sessionTitle").textContent = state.session.title || "New session";
   renderMessages();
   renderTouchedFiles();
   renderHistoryPanel();
+  renderSettingsPanel();
 
   const modeBtn = el("approvalModeBtn");
   modeBtn.textContent = state.approvalMode === "auto" ? "Auto" : "Ask";
@@ -296,6 +321,33 @@ document.addEventListener("click", (e) => {
   }
 });
 el("approvalModeBtn").addEventListener("click", () => vscode.postMessage({ type: "toggleApprovalMode" }));
+
+el("settingsBtn").addEventListener("click", () => {
+  historyOpen = false;
+  settingsOpen = !settingsOpen;
+  renderHistoryPanel();
+  renderSettingsPanel();
+});
+function wireSettingField(inputId, key) {
+  el(inputId).addEventListener("change", (e) =>
+    vscode.postMessage({ type: "updateSetting", key, value: e.target.value.trim() }),
+  );
+}
+wireSettingField("clientIdInput", "clientId");
+wireSettingField("aiCoreBaseUrlInput", "aiCoreBaseUrl");
+wireSettingField("tokenUrlInput", "tokenUrl");
+wireSettingField("resourceGroupInput", "resourceGroup");
+wireSettingField("deploymentIdInput", "deploymentId");
+
+el("clientSecretInput").addEventListener("change", (e) => {
+  const value = e.target.value.trim();
+  if (value) vscode.postMessage({ type: "updateSecret", value });
+});
+
+el("openSettingsJsonLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  vscode.postMessage({ type: "openSettingsJson" });
+});
 
 window.addEventListener("message", (event) => {
   if (event.data.type === "state") {

@@ -3,7 +3,7 @@
   "displayName": "Harness",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "internal",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "icon": "media/icon.png",
   "repository": {
@@ -53,9 +53,20 @@
     ],
     "configuration": {
       "properties": {
-        "harness.serviceKeyPath": {
+        "harness.clientId": {
           "type": "string",
-          "default": ""
+          "default": "",
+          "description": "SAP AI Core client ID (Set via the Harness settings panel, not this field, is recommended)."
+        },
+        "harness.aiCoreBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "SAP AI Core API base URL (serviceurls.AI_API_URL from your service key)."
+        },
+        "harness.tokenUrl": {
+          "type": "string",
+          "default": "",
+          "description": "SAP AI Core OAuth token URL (the \"url\" field from your service key)."
         },
         "harness.deploymentId": {
           "type": "string",
