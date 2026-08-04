@@ -32,6 +32,16 @@ export function classifyError(err: unknown): ClassifiedError {
     return { category: "aborted", message: "Stopped.", retryable: false };
   }
 
+  // auth.ts already phrases token failures in terms of the field to go and fix,
+  // so pass its message straight through rather than replacing it with the
+  // generic "check your credentials" below. Matched by name, not instanceof, to
+  // keep this module free of imports.
+  if (err instanceof Error && err.name === "TokenError") {
+    const status = (err as Error & { status?: number }).status ?? 0;
+    if (status === 0) return { category: "network", message: err.message, retryable: true };
+    return { category: "auth", message: err.message, retryable: false };
+  }
+
   if (err instanceof HttpError) {
     if (err.status === 401) {
       return { category: "auth", message: "Authentication failed — check your SAP AI Core credentials in Couplet settings.", retryable: false };

@@ -8,9 +8,9 @@ let state = {
   touchedFiles: [],
   sessionList: [],
   approvalMode: "ask",
-  model: "GPT-5",
+  model: "",
   streaming: false,
-  config: { clientId: "", aiCoreBaseUrl: "", tokenUrl: "", resourceGroup: "", deploymentId: "", hasClientSecret: false },
+  config: { clientId: "", aiCoreBaseUrl: "", tokenUrl: "", resourceGroup: "", hasClientSecret: false },
 };
 let historyOpen = false;
 let settingsOpen = false;
@@ -434,7 +434,6 @@ function renderSettingsPanel() {
     el("aiCoreBaseUrlInput").value = state.config?.aiCoreBaseUrl || "";
     el("tokenUrlInput").value = state.config?.tokenUrl || "";
     el("resourceGroupInput").value = state.config?.resourceGroup || "";
-    el("deploymentIdInput").value = state.config?.deploymentId || "";
     settingsPopulated = true;
   }
   if (!settingsOpen) settingsPopulated = false;
@@ -476,7 +475,9 @@ function renderModelPicker() {
   for (const model of models.list) {
     const row = document.createElement("div");
     row.className = "model-row";
-    if (model.id === state.config?.deploymentId) row.classList.add("active");
+    // Ticked by model, not by deployment id: the id is resolved at call time
+    // and is no longer stored.
+    if (model.label === state.model) row.classList.add("active");
 
     const check = document.createElement("span");
     check.className = "check";
@@ -508,7 +509,9 @@ function render() {
 
   const modeBtn = el("approvalModeBtn");
   modeBtn.textContent = state.approvalMode === "auto" ? "Auto" : "Ask";
-  el("modelName").textContent = state.model || "GPT-5";
+  // No invented default: with nothing chosen the first running deployment is
+  // used, and claiming a specific model here would be a guess.
+  el("modelName").textContent = state.model || "Select model";
 
   const sendBtn = el("sendBtn");
   sendBtn.classList.toggle("stopping", state.streaming);
@@ -616,7 +619,6 @@ wireSettingField("clientIdInput", "clientId");
 wireSettingField("aiCoreBaseUrlInput", "aiCoreBaseUrl");
 wireSettingField("tokenUrlInput", "tokenUrl");
 wireSettingField("resourceGroupInput", "resourceGroup");
-wireSettingField("deploymentIdInput", "deploymentId");
 
 el("clientSecretInput").addEventListener("change", (e) => {
   const value = e.target.value.trim();

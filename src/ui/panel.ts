@@ -7,9 +7,12 @@ import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, dele
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot, resolveWithinRoot } from "../tools/index.ts";
-import { chat, CLIENT_SECRET_KEY } from "../aicore/client.ts";
+import { chat } from "../aicore/client.ts";
+import { CLIENT_SECRET_KEY, readConfig } from "../aicore/config.ts";
+import { normalizeAuthUrl, normalizeApiUrl } from "../aicore/urls.ts";
+import { invalidateToken } from "../aicore/auth.ts";
 import { classifyError } from "../aicore/errors.ts";
-import { listDeployments, type Deployment } from "../aicore/models.ts";
+import { listDeployments, invalidateDeploymentCache, type Deployment } from "../aicore/models.ts";
 
 // Coalesce streamed tokens into at most one webview post per interval. Short
 // enough to still read as live typing, long enough that a fast model does not
@@ -137,6 +140,46 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
     this.hasClientSecret = !!(await this.secrets.get(CLIENT_SECRET_KEY));
   }
 
+  /**
+   * Credentials belong to the person, not to the folder. They used to be
+   * written with ConfigurationTarget.Workspace, which meant they lived in one
+   * project's .vscode/settings.json and the extension looked unconfigured — "it
+   * worked yesterday" — the moment another folder was opened. Global keeps them
+   * with the user across every workspace.
+   *
+   * Any workspace-scoped copy from an earlier version is removed at the same
+   * time, because a workspace value shadows the global one and the panel would
+   * otherwise keep showing a stale credential it is no longer writing to.
+   */
+  private async saveGlobalSetting(key: string, value: unknown) {
+    const cfg = vscode.workspace.getConfiguration("couplet");
+    await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+    try {
+      if (cfg.inspect(key)?.workspaceValue !== undefined) {
+        await cfg.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+      }
+    } catch {
+      // No folder open, or a read-only workspace file: the global write above
+      // is what matters, so do not fail the save over the cleanup.
+    }
+  }
+
+  private async saveCredentialSetting(key: string, value: unknown) {
+    await this.saveGlobalSetting(key, value);
+    this.onCredentialsChanged();
+  }
+
+  /**
+   * Drops everything derived from the old credentials. Without this an edited
+   * client id kept using the token minted for the previous one, and a corrected
+   * setting appeared to change nothing.
+   */
+  private onCredentialsChanged() {
+    invalidateToken();
+    invalidateDeploymentCache();
+    this.connectionTest = { state: "idle" };
+  }
+
   private async postState() {
     const cfg = vscode.workspace.getConfiguration("couplet");
     const hasClientSecret = this.hasClientSecret;
@@ -156,13 +199,12 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
       touchedFiles: this.touchedFiles,
       sessionList: this.sessionList,
       approvalMode: cfg.get<string>("approvalMode", "ask"),
-      model: cfg.get<string>("model", "") || "GPT-5",
+      model: cfg.get<string>("model", ""),
       config: {
         clientId: cfg.get<string>("clientId", ""),
         aiCoreBaseUrl: cfg.get<string>("aiCoreBaseUrl", ""),
         tokenUrl: cfg.get<string>("tokenUrl", ""),
         resourceGroup: cfg.get<string>("resourceGroup", "default"),
-        deploymentId: cfg.get<string>("deploymentId", ""),
         hasClientSecret,
       },
       connectionTest: this.connectionTest,
@@ -204,9 +246,15 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Sends one trivial completion to verify credentials, the endpoint, and
-   * streaming actually work — the failure that matters most on first run, and
-   * the one worth catching here rather than midway through a real task.
+   * Verifies credentials, the endpoint, and streaming — the failure that
+   * matters most on first run, and the one worth catching here rather than
+   * midway through a real task.
+   *
+   * Listing deployments comes first because it needs nothing but the
+   * credentials: it separates "your client id/secret/URL is wrong" from "the
+   * model call itself failed", and it fills the model list, which used to be
+   * unreachable until a connection test passed — and the test could not pass
+   * until a deployment was already configured.
    */
   private async testConnection() {
     this.connectionTest = { state: "testing" };
@@ -214,7 +262,22 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
+    let listed = false;
     try {
+      const list = await listDeployments(controller.signal);
+      listed = true;
+      this.models = { state: "ready", list };
+      if (!list.length) {
+        const { resourceGroup } = readConfig();
+        this.models.message = "No running deployments found in this resource group.";
+        this.connectionTest = {
+          state: "error",
+          message: `Credentials are valid, but resource group "${resourceGroup}" has no running model deployment.`,
+        };
+        return;
+      }
+      this.postState();
+
       let streamed = "";
       const reply = await chat(
         [{ role: "user", content: "Reply with the single word: OK" }],
@@ -229,10 +292,11 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
       };
     } catch (err) {
       const classified = classifyError(err);
-      this.connectionTest = {
-        state: "error",
-        message: classified.category === "aborted" ? "Timed out after 30s." : classified.message,
-      };
+      const message = classified.category === "aborted" ? "Timed out after 30s." : classified.message;
+      this.connectionTest = { state: "error", message };
+      // The credentials never got as far as listing, so the model list on
+      // screen is not trustworthy either.
+      if (!listed) this.models = { state: "error", list: [], message };
     } finally {
       clearTimeout(timeout);
       this.postState();
@@ -316,11 +380,17 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         break;
       }
       case "updateSetting": {
-        const allowedKeys = new Set(["deploymentId", "clientId", "aiCoreBaseUrl", "tokenUrl", "resourceGroup"]);
-        if (allowedKeys.has(msg.key)) {
-          await vscode.workspace
-            .getConfiguration("couplet")
-            .update(msg.key, msg.value, vscode.ConfigurationTarget.Workspace);
+        const allowedKeys = new Set(["clientId", "aiCoreBaseUrl", "tokenUrl", "resourceGroup"]);
+        if (allowedKeys.has(msg.key) && typeof msg.value === "string") {
+          // Cleaned on the way in as well as on the way out, so the panel shows
+          // the URL that will actually be called rather than the raw paste.
+          const value =
+            msg.key === "tokenUrl"
+              ? normalizeAuthUrl(msg.value)
+              : msg.key === "aiCoreBaseUrl"
+                ? normalizeApiUrl(msg.value)
+                : msg.value.trim();
+          await this.saveCredentialSetting(msg.key, value);
           this.postState();
         }
         break;
@@ -328,18 +398,16 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
       case "updateSecret": {
         if (typeof msg.value === "string" && msg.value.length > 0) {
           await this.secrets.store(CLIENT_SECRET_KEY, msg.value);
+          this.onCredentialsChanged();
           await this.refreshSecretFlag();
           this.postState();
         }
         break;
       }
       case "testConnection":
-        if (this.connectionTest.state !== "testing") {
-          await this.testConnection();
-          // Credentials just proved good, so the model list is now fetchable —
-          // load it here rather than making the user go find it.
-          if (this.connectionTest.state === "ok") await this.refreshModels();
-        }
+        // testConnection lists the deployments itself, so the model list is
+        // already loaded by the time it returns.
+        if (this.connectionTest.state !== "testing") await this.testConnection();
         break;
       case "refreshModels":
         await this.refreshModels();
@@ -348,8 +416,26 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         const chosen = this.models.list.find((d) => d.id === msg.deploymentId);
         if (!chosen) break;
         const cfg = vscode.workspace.getConfiguration("couplet");
-        await cfg.update("deploymentId", chosen.id, vscode.ConfigurationTarget.Workspace);
-        await cfg.update("model", chosen.label, vscode.ConfigurationTarget.Workspace);
+        // Store the model, not the deployment id. Ids change whenever a model
+        // is redeployed, so a stored id silently starts 404ing; the label is
+        // stable and resolves to whatever deployment currently serves it. Any
+        // id pinned by an earlier version is cleared for the same reason.
+        await this.saveGlobalSetting("model", chosen.label);
+        for (const scope of [vscode.ConfigurationTarget.Workspace, vscode.ConfigurationTarget.Global]) {
+          const inspected = cfg.inspect("deploymentId");
+          const set =
+            scope === vscode.ConfigurationTarget.Workspace
+              ? inspected?.workspaceValue !== undefined
+              : inspected?.globalValue !== undefined;
+          if (set) {
+            try {
+              await cfg.update("deploymentId", undefined, scope);
+            } catch {
+              // Nothing to unpin here (no folder open, read-only settings).
+            }
+          }
+        }
+        invalidateDeploymentCache();
         this.postState();
         break;
       }

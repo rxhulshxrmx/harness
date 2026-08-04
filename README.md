@@ -43,16 +43,18 @@ Everything is entered in the panel; you never have to edit `settings.json`.
    | AI Core base URL | `serviceurls.AI_API_URL` |
    | Auth URL | `url` |
    | Resource group | usually `default` |
-   | Deployment ID | the deployment serving your model |
 
-4. Click **Test connection**. It sends one trivial message and reports back
-   inline, so you know credentials, endpoint, and streaming all work before you
-   start a real task rather than finding out midway through one.
-5. Close settings (✕) and send a message.
+   There is no deployment ID to find: Couplet lists the running deployments in
+   your resource group and resolves the right one from the model you pick.
+
+4. Click **Test connection**. It lists your deployments and then sends one
+   trivial message, so you know credentials, endpoint, and streaming all work
+   before you start a real task rather than finding out midway through one.
+5. Close settings (✕), pick a model from the composer, and send a message.
 
 The client secret is stored in your OS keychain via the editor's SecretStorage,
-not in `settings.json`. The other values are plain configuration and are written
-to your workspace settings.
+not in `settings.json`. The other values are plain configuration, written to your
+user settings so they follow you into every workspace.
 
 ## Using it
 
@@ -91,10 +93,10 @@ Most people never need these — the settings panel covers the common ones.
 | `couplet.clientId` | `""` | SAP AI Core client ID |
 | `couplet.aiCoreBaseUrl` | `""` | `serviceurls.AI_API_URL` from the service key |
 | `couplet.tokenUrl` | `""` | OAuth token URL (`url` from the service key) |
-| `couplet.deploymentId` | `""` | Deployment to send inference requests to |
+| `couplet.deploymentId` | `""` | Optional. Pins one deployment; empty means resolve it from the model |
 | `couplet.resourceGroup` | `"default"` | AI Core resource group header |
 | `couplet.apiVersion` | `"2024-10-21"` | Inference API version |
-| `couplet.model` | `""` | Display-only label in the composer |
+| `couplet.model` | `""` | Model to route to, as `name:version` |
 | `couplet.approvalMode` | `"ask"` | `ask` or `auto` |
 | `couplet.contextBudget` | `100000` | Token budget before the transcript is compacted |
 

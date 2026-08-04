@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseDeployments } from "./models.ts";
+import { parseDeployments, pickDeployment } from "./models.ts";
 
 function deployment(over: Record<string, unknown> = {}) {
   return {
@@ -54,4 +54,41 @@ test("returns an empty list for malformed or empty payloads", () => {
   for (const body of [null, undefined, {}, { resources: "nope" }, { resources: [] }, { resources: [null, 42] }]) {
     assert.deepEqual(parseDeployments(body), []);
   }
+});
+
+const list = [
+  { id: "a", modelName: "gpt-4o", label: "gpt-4o:2024-08-06" },
+  { id: "b", modelName: "gpt-4o-mini", label: "gpt-4o-mini:2024-07-18" },
+  { id: "c", modelName: "mistral", label: "mistral" },
+];
+
+test("picks the deployment whose label matches the chosen model", () => {
+  assert.equal(pickDeployment(list, "gpt-4o:2024-08-06")?.id, "a");
+  assert.equal(pickDeployment(list, "mistral")?.id, "c");
+});
+
+test("a bare model name matches its versioned deployment", () => {
+  assert.equal(pickDeployment(list, "gpt-4o")?.id, "a");
+});
+
+test("a bare name never falls through to a longer one that starts the same", () => {
+  assert.equal(pickDeployment(list, "gpt-4o")?.id, "a", "gpt-4o must not resolve to gpt-4o-mini");
+  assert.equal(pickDeployment(list, "gpt-4o-mini")?.id, "b");
+});
+
+test("model names are matched case-insensitively", () => {
+  assert.equal(pickDeployment(list, "GPT-4o")?.id, "a");
+});
+
+test("an unset model falls back to the first deployment", () => {
+  assert.equal(pickDeployment(list, "")?.id, "a");
+  assert.equal(pickDeployment(list, "   ")?.id, "a");
+});
+
+test("a model that is not deployed resolves to nothing, not to another model", () => {
+  assert.equal(pickDeployment(list, "llama-3"), undefined);
+});
+
+test("an empty deployment list resolves to nothing", () => {
+  assert.equal(pickDeployment([], "gpt-4o"), undefined);
 });

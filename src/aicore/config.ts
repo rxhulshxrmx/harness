@@ -1,0 +1,63 @@
+import type * as vscodeTypes from "vscode";
+import { getSecrets } from "./context.ts";
+import { normalizeAuthUrl, normalizeApiUrl } from "./urls.ts";
+import type { ServiceKey } from "./types.ts";
+
+declare function require(id: "vscode"): typeof vscodeTypes;
+
+export const CLIENT_SECRET_KEY = "couplet.clientSecret";
+
+// Credentials are entered as separate fields (Client ID, Client Secret, AI Core
+// Base URL, Auth URL, Resource Group) in the settings panel, matching how SAP
+// AI Core credentials are actually issued — rather than requiring a path to a
+// downloaded service-key JSON file. Only the secret goes through SecretStorage;
+// the rest are plain (non-secret) identifiers/URLs.
+//
+// Lives in its own module rather than in client.ts so models.ts can read the
+// same config without the two files importing each other in a cycle.
+
+/** Names the missing pieces, so the error says what to go and fix. */
+export function missingCredentialFields(fields: {
+  clientid: string;
+  clientsecret: string;
+  authUrl: string;
+  apiUrl: string;
+}): string[] {
+  const missing: string[] = [];
+  if (!fields.clientid) missing.push("Client ID");
+  if (!fields.clientsecret) missing.push("Client secret");
+  if (!fields.apiUrl) missing.push("AI Core base URL");
+  if (!fields.authUrl) missing.push("Auth URL");
+  return missing;
+}
+
+export async function loadServiceKey(): Promise<ServiceKey> {
+  const vscode = require("vscode");
+  const cfg = vscode.workspace.getConfiguration("couplet");
+  const clientid = cfg.get<string>("clientId", "").trim();
+  const authUrl = normalizeAuthUrl(cfg.get<string>("tokenUrl", ""));
+  const apiUrl = normalizeApiUrl(cfg.get<string>("aiCoreBaseUrl", ""));
+  const clientsecret = ((await getSecrets().get(CLIENT_SECRET_KEY)) ?? "").trim();
+
+  const missing = missingCredentialFields({ clientid, clientsecret, authUrl, apiUrl });
+  if (missing.length) {
+    throw new Error(
+      `SAP AI Core credentials are incomplete — missing ${missing.join(", ")}. Open Couplet settings (gear icon) to add them.`,
+    );
+  }
+  return { clientid, clientsecret, url: authUrl, serviceurls: { AI_API_URL: apiUrl } };
+}
+
+export function readConfig() {
+  const vscode = require("vscode");
+  const cfg = vscode.workspace.getConfiguration("couplet");
+  return {
+    // Optional: an escape hatch for pinning one deployment by hand. Left empty
+    // (the default) the deployment is resolved from the chosen model instead —
+    // see resolveDeploymentId in models.ts.
+    deploymentId: cfg.get<string>("deploymentId", "").trim(),
+    resourceGroup: cfg.get<string>("resourceGroup", "default").trim() || "default",
+    apiVersion: cfg.get<string>("apiVersion", "2024-10-21"),
+    model: cfg.get<string>("model", "").trim(),
+  };
+}

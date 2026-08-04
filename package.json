@@ -3,7 +3,7 @@
   "displayName": "Couplet",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "sharma-so",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "license": "MIT",
   "icon": "media/icon.png",
   "engines": {
@@ -62,7 +62,8 @@
         },
         "couplet.deploymentId": {
           "type": "string",
-          "default": ""
+          "default": "",
+          "description": "Optional. Pin one SAP AI Core deployment id. Left empty, the deployment is looked up from the model you pick."
         },
         "couplet.resourceGroup": {
           "type": "string",

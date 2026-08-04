@@ -1,42 +1,11 @@
-import type * as vscodeTypes from "vscode";
 import { getToken, invalidateToken } from "./auth.ts";
 import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse.ts";
 import { HttpError } from "./errors.ts";
-import { getSecrets } from "./context.ts";
-import type { Message, AssistantMessage, ToolSchema, ToolCall, ServiceKey } from "./types.ts";
+import { loadServiceKey, readConfig } from "./config.ts";
+import { resolveDeploymentId, discardPinnedDeployment } from "./models.ts";
+import type { Message, AssistantMessage, ToolSchema, ToolCall } from "./types.ts";
 
-declare function require(id: "vscode"): typeof vscodeTypes;
-
-export const CLIENT_SECRET_KEY = "couplet.clientSecret";
-
-// Credentials are entered as separate fields (Client ID, Client Secret, AI
-// Core Base URL, Auth URL, Resource Group) in the settings panel, matching
-// how SAP AI Core credentials are actually issued — rather than requiring a
-// path to a downloaded service-key JSON file. Only the secret goes through
-// SecretStorage; the rest are plain (non-secret) identifiers/URLs.
-export async function loadServiceKey(): Promise<ServiceKey> {
-  const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("couplet");
-  const clientid = cfg.get<string>("clientId", "");
-  const url = cfg.get<string>("tokenUrl", "");
-  const AI_API_URL = cfg.get<string>("aiCoreBaseUrl", "");
-  const clientsecret = (await getSecrets().get(CLIENT_SECRET_KEY)) ?? "";
-
-  if (!clientid || !clientsecret || !url || !AI_API_URL) {
-    throw new Error("SAP AI Core credentials are not fully set — open Couplet settings (gear icon) to add them.");
-  }
-  return { clientid, clientsecret, url, serviceurls: { AI_API_URL } };
-}
-
-export function readConfig() {
-  const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("couplet");
-  return {
-    deploymentId: cfg.get<string>("deploymentId", ""),
-    resourceGroup: cfg.get<string>("resourceGroup", "default"),
-    apiVersion: cfg.get<string>("apiVersion", "2024-10-21"),
-  };
-}
+export { CLIENT_SECRET_KEY, loadServiceKey, readConfig } from "./config.ts";
 
 export async function chat(
   messages: Message[],
@@ -44,17 +13,21 @@ export async function chat(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<AssistantMessage> {
-  const { deploymentId, resourceGroup, apiVersion } = readConfig();
+  const { resourceGroup, apiVersion } = readConfig();
   const key = await loadServiceKey();
-  const url = `${key.serviceurls.AI_API_URL}/v2/inference/deployments/${deploymentId}/chat/completions?api-version=${apiVersion}`;
+  // Resolved from the chosen model rather than configured by hand.
+  let deploymentId = await resolveDeploymentId(signal);
+  const endpoint = (id: string) =>
+    `${key.serviceurls.AI_API_URL}/v2/inference/deployments/${id}/chat/completions?api-version=${apiVersion}`;
 
   let attempt = 0;
   let retriedAfter401 = false;
+  let retriedAfter404 = false;
 
   for (;;) {
     if (signal?.aborted) throw new Error("Aborted");
     const token = await getToken(key);
-    const res = await fetch(url, {
+    const res = await fetch(endpoint(deploymentId), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -69,6 +42,19 @@ export async function chat(
       retriedAfter401 = true;
       invalidateToken();
       continue;
+    }
+    // A 404 on this path means the deployment id is gone — most often because
+    // the model was redeployed and issued a new one. Re-resolve from the chosen
+    // model and try once more, rather than making the user discover that a
+    // number they pasted months ago has expired.
+    if (res.status === 404 && !retriedAfter404) {
+      retriedAfter404 = true;
+      discardPinnedDeployment();
+      const fresh = await resolveDeploymentId(signal);
+      if (fresh !== deploymentId) {
+        deploymentId = fresh;
+        continue;
+      }
     }
     if ((res.status === 429 || res.status >= 500) && attempt < 3) {
       attempt++;
