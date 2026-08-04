@@ -3,6 +3,7 @@ import { splitSSEBuffer, mergeToolCallDelta, extractDataLines } from "./sse.ts";
 import { HttpError } from "./errors.ts";
 import { loadServiceKey, readConfig } from "./config.ts";
 import { resolveDeploymentId, discardPinnedDeployment } from "./models.ts";
+import { decideRetry, type RetryState } from "./retry.ts";
 import type { Message, AssistantMessage, ToolSchema, ToolCall } from "./types.ts";
 
 export { CLIENT_SECRET_KEY, loadServiceKey, readConfig } from "./config.ts";
@@ -20,9 +21,7 @@ export async function chat(
   const endpoint = (id: string) =>
     `${key.serviceurls.AI_API_URL}/v2/inference/deployments/${id}/chat/completions?api-version=${apiVersion}`;
 
-  let attempt = 0;
-  let retriedAfter401 = false;
-  let retriedAfter404 = false;
+  const retry: RetryState = { attempt: 0, triedTokenRefresh: false, triedDeploymentReresolve: false };
 
   for (;;) {
     if (signal?.aborted) throw new Error("Aborted");
@@ -38,17 +37,18 @@ export async function chat(
       signal,
     });
 
-    if (res.status === 401 && !retriedAfter401) {
-      retriedAfter401 = true;
+    const decision = decideRetry(res.status, retry);
+    if (decision.action === "refresh-token") {
+      retry.triedTokenRefresh = true;
       invalidateToken();
       continue;
     }
-    // A 404 on this path means the deployment id is gone — most often because
-    // the model was redeployed and issued a new one. Re-resolve from the chosen
-    // model and try once more, rather than making the user discover that a
-    // number they pasted months ago has expired.
-    if (res.status === 404 && !retriedAfter404) {
-      retriedAfter404 = true;
+    if (decision.action === "reresolve-deployment") {
+      // The deployment id is gone — most often because the model was
+      // redeployed and issued a new one. Re-resolve from the chosen model
+      // rather than making the user discover that a number they pasted months
+      // ago has expired. Only worth another request if it actually changed.
+      retry.triedDeploymentReresolve = true;
       discardPinnedDeployment();
       const fresh = await resolveDeploymentId(signal);
       if (fresh !== deploymentId) {
@@ -56,9 +56,9 @@ export async function chat(
         continue;
       }
     }
-    if ((res.status === 429 || res.status >= 500) && attempt < 3) {
-      attempt++;
-      await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    if (decision.action === "backoff") {
+      retry.attempt++;
+      await new Promise((r) => setTimeout(r, decision.delayMs));
       continue;
     }
     if (!res.ok) {

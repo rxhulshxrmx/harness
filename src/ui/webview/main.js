@@ -7,6 +7,7 @@ let state = {
   pendingApproval: null,
   touchedFiles: [],
   turnError: null,
+  contextUsage: { tokens: 0, budget: 100000 },
   sessionList: [],
   approvalMode: "ask",
   model: "",
@@ -247,67 +248,139 @@ function appendInline(parent, text) {
   }
 }
 
+// Must match SUMMARY_PREFIX in src/agent/compaction.ts. This file is copied
+// into the bundle verbatim rather than bundled, so it cannot import it.
+const SUMMARY_PREFIX = "[Session summary]";
+
+// What has already been drawn into #messages, so a repaint can append only
+// what is new. Rendering fires once per message now — a turn with ten tool
+// calls used to mean ten teardowns and rebuilds of the entire transcript,
+// which is the cost that grows with session length rather than with the work
+// being done.
+let rendered = { sessionId: null, count: 0, turnIndex: 0, lastFingerprint: "" };
+
+// Identifies the final rendered message well enough to notice that history was
+// rewritten underneath us without deep-comparing the whole transcript.
+function fingerprint(msg) {
+  if (!msg) return "";
+  return `${msg.role}:${(msg.content ?? "").length}:${(msg.tool_calls ?? []).length}`;
+}
+
+function collapsible(className, summary, body) {
+  const div = document.createElement("div");
+  div.className = className;
+  div.textContent = summary;
+  const bodyEl = document.createElement("div");
+  bodyEl.className = "body";
+  bodyEl.textContent = body;
+  div.appendChild(bodyEl);
+  div.addEventListener("click", () => div.classList.toggle("expanded"));
+  return div;
+}
+
+function messageNodes(msg) {
+  const nodes = [];
+  if (msg.role === "user") {
+    // The summary that replaces compacted history is a user message as far as
+    // the API is concerned, but the user never typed it — showing it as their
+    // words made their own history look like something they had said.
+    if ((msg.content ?? "").startsWith(SUMMARY_PREFIX)) {
+      const div = collapsible(
+        "compaction",
+        "Earlier messages summarised to free up context",
+        (msg.content ?? "").slice(SUMMARY_PREFIX.length).trim(),
+      );
+      // Still consumes a turn index even though it is not drawn as a turn:
+      // runTurn numbers turns by counting user messages, and the summary is one
+      // of those, so skipping it here would offset every rewind after a
+      // compaction by one and restore the wrong turn.
+      nodes.push({ node: div, consumesTurn: true });
+      return nodes;
+    }
+    const currentTurn = rendered.turnIndex;
+    const div = document.createElement("div");
+    div.className = "msg user";
+    const rewindBtn = document.createElement("button");
+    rewindBtn.className = "rewind-btn";
+    rewindBtn.textContent = "⟲";
+    rewindBtn.title = "Rewind to before this turn";
+    rewindBtn.addEventListener("click", () => vscode.postMessage({ type: "rewindToTurn", turnIndex: currentTurn }));
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = msg.content;
+    // Block first, rewind after it: the block now starts at the left edge, so
+    // a leading button would push it out of alignment with everything else.
+    div.appendChild(bubble);
+    div.appendChild(rewindBtn);
+    nodes.push({ node: div, consumesTurn: true });
+  } else if (msg.role === "assistant") {
+    if (msg.content) {
+      const div = document.createElement("div");
+      div.className = "msg assistant";
+      div.appendChild(renderMarkdown(msg.content));
+      nodes.push({ node: div, consumesTurn: false });
+    }
+    for (const call of msg.tool_calls ?? []) {
+      nodes.push({
+        node: collapsible("tool-call", `${call.function.name} ${call.function.arguments}`, call.function.arguments),
+        consumesTurn: false,
+      });
+    }
+  } else if (msg.role === "tool") {
+    const content = msg.content || "";
+    nodes.push({ node: collapsible("tool-call", content.split("\n")[0].slice(0, 80), content), consumesTurn: false });
+  }
+  return nodes;
+}
+
 function renderMessages() {
   const messagesEl = el("messages");
-  messagesEl.innerHTML = "";
+  const messages = state.session.messages;
 
-  let turnIndex = 0;
-  for (const msg of state.session.messages) {
-    if (msg.role === "user") {
-      const currentTurn = turnIndex++;
-      const div = document.createElement("div");
-      div.className = "msg user";
-      const rewindBtn = document.createElement("button");
-      rewindBtn.className = "rewind-btn";
-      rewindBtn.textContent = "⟲";
-      rewindBtn.title = "Rewind to before this turn";
-      rewindBtn.addEventListener("click", () => vscode.postMessage({ type: "rewindToTurn", turnIndex: currentTurn }));
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.textContent = msg.content;
-      // Block first, rewind after it: the block now starts at the left edge, so
-      // a leading button would push it out of alignment with everything else.
-      div.appendChild(bubble);
-      div.appendChild(rewindBtn);
-      messagesEl.appendChild(div);
-    } else if (msg.role === "assistant") {
-      if (msg.content) {
-        const div = document.createElement("div");
-        div.className = "msg assistant";
-        div.appendChild(renderMarkdown(msg.content));
-        messagesEl.appendChild(div);
-      }
-      for (const call of msg.tool_calls ?? []) {
-        const div = document.createElement("div");
-        div.className = "tool-call";
-        div.textContent = `${call.function.name} ${call.function.arguments}`;
-        const body = document.createElement("div");
-        body.className = "body";
-        body.textContent = call.function.arguments;
-        div.appendChild(body);
-        div.addEventListener("click", () => div.classList.toggle("expanded"));
-        messagesEl.appendChild(div);
-      }
-    } else if (msg.role === "tool") {
-      const div = document.createElement("div");
-      div.className = "tool-call";
-      const preview = (msg.content || "").split("\n")[0].slice(0, 80);
-      div.textContent = preview;
-      const body = document.createElement("div");
-      body.className = "body";
-      body.textContent = msg.content;
-      div.appendChild(body);
-      div.addEventListener("click", () => div.classList.toggle("expanded"));
-      messagesEl.appendChild(div);
-    }
+  // A rewind or a compaction rewrites history rather than extending it, and a
+  // different session shares nothing at all; those are the cases that still
+  // need a full rebuild.
+  const appendable =
+    rendered.sessionId === state.session.id &&
+    messages.length >= rendered.count &&
+    fingerprint(messages[rendered.count - 1]) === rendered.lastFingerprint;
+
+  if (!appendable) {
+    messagesEl.innerHTML = "";
+    rendered = { sessionId: state.session.id, count: 0, turnIndex: 0, lastFingerprint: "" };
   }
 
+  const tail = el("tail") ?? document.createElement("div");
+  tail.id = "tail";
+  tail.innerHTML = "";
+
+  for (let i = rendered.count; i < messages.length; i++) {
+    for (const { node, consumesTurn } of messageNodes(messages[i])) {
+      if (consumesTurn) rendered.turnIndex++;
+      messagesEl.appendChild(node);
+    }
+  }
+  rendered.count = messages.length;
+  rendered.lastFingerprint = fingerprint(messages[messages.length - 1]);
+
+  // Transient blocks live in their own container after the messages, so drawing
+  // them again never touches a message node.
+  messagesEl.appendChild(tail);
+  renderTail(tail);
+
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// The blocks that come and go during a turn: the live reply, the waiting
+// mark, a failure, a pending approval. Kept out of the message list so a
+// repaint of these never rebuilds the transcript.
+function renderTail(tailEl) {
   if (state.streamingText) {
     const div = document.createElement("div");
     div.className = "msg assistant";
     div.id = "streamingMsg";
     div.appendChild(renderMarkdown(state.streamingText));
-    messagesEl.appendChild(div);
+    tailEl.appendChild(div);
   } else if (state.streaming && !state.pendingApproval) {
     // The gap between sending and the first token covers a token fetch, a
     // deployment lookup and the model's own latency. Without a mark here the
@@ -315,7 +388,7 @@ function renderMessages() {
     const div = document.createElement("div");
     div.className = "working";
     div.textContent = "Working…";
-    messagesEl.appendChild(div);
+    tailEl.appendChild(div);
   }
 
   // Its own block, not an arm of the chain above: an error can land alongside a
@@ -325,7 +398,7 @@ function renderMessages() {
     const div = document.createElement("div");
     div.className = "turn-error";
     div.textContent = state.turnError;
-    messagesEl.appendChild(div);
+    tailEl.appendChild(div);
   }
 
   if (state.pendingApproval) {
@@ -363,10 +436,32 @@ function renderMessages() {
     actions.appendChild(approveBtn);
     actions.appendChild(denyBtn);
     div.appendChild(actions);
-    messagesEl.appendChild(div);
+    tailEl.appendChild(div);
   }
+}
 
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+// Compaction rewrites the conversation at 75% of the budget, which is a
+// surprise if the first sign of it is a summary appearing. Stay quiet until
+// half full — a percentage on screen from the first message would just be
+// noise — then warn as the rewrite gets close.
+const CONTEXT_SHOW_AT = 0.5;
+const CONTEXT_COMPACTS_AT = 0.75;
+
+function renderContextPill() {
+  const pill = el("contextPill");
+  const usage = state.contextUsage;
+  const ratio = usage && usage.budget > 0 ? usage.tokens / usage.budget : 0;
+  if (ratio < CONTEXT_SHOW_AT) {
+    pill.style.display = "none";
+    return;
+  }
+  pill.style.display = "";
+  pill.textContent = `${Math.round(ratio * 100)}% context`;
+  pill.classList.toggle("near-limit", ratio >= CONTEXT_COMPACTS_AT);
+  pill.title =
+    ratio >= CONTEXT_COMPACTS_AT
+      ? "Older messages will be summarised to make room."
+      : `About ${usage.tokens.toLocaleString()} of ${usage.budget.toLocaleString()} tokens used.`;
 }
 
 function renderTouchedFiles() {
@@ -531,6 +626,7 @@ function render() {
   // No invented default: with nothing chosen the first running deployment is
   // used, and claiming a specific model here would be a guess.
   el("modelName").textContent = state.model || "Select model";
+  renderContextPill();
 
   const sendBtn = el("sendBtn");
   sendBtn.classList.toggle("stopping", state.streaming);

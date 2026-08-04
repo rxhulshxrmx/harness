@@ -17,6 +17,13 @@ plain text, max 800 words.`;
 // message without its tool-result, or a tool-result without its call.
 const KEEP_RECENT_TURNS = 2;
 
+// Prefix marking the message that replaces the compacted history. It has to be
+// a user message — that is the only role the API lets us hand a summary back in
+// — but it is not something the user said, so the panel renders it as a divider
+// rather than as their words. The webview matches this exact string; it is
+// copied verbatim rather than bundled, so it cannot import this constant.
+export const SUMMARY_PREFIX = "[Session summary]";
+
 // Finds the earliest safe split index that keeps at most `keepTurns` of the
 // most recent turns intact, falling back to fewer turns (down to just the
 // single most recent user message, matching the old always-collapse
@@ -50,5 +57,5 @@ export async function compact(session: Session, chatFn: typeof realChat = realCh
     fs.appendFileSync(session.filePath, JSON.stringify({ type: "compaction" }) + "\n");
   }
 
-  session.messages = [{ role: "user", content: `[Session summary]\n${summary}` }, ...recent];
+  session.messages = [{ role: "user", content: `${SUMMARY_PREFIX}\n${summary}` }, ...recent];
 }

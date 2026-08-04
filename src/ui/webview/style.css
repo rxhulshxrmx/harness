@@ -289,6 +289,46 @@ button {
 .msg code.file-ref { cursor: pointer; color: var(--vscode-textLink-foreground); }
 .msg code.file-ref:hover { text-decoration: underline; }
 
+/* The summary standing in for compacted history. Reads as a divider rather
+   than as a message, because it is neither side of the conversation — click to
+   read what was folded away. */
+.compaction {
+  cursor: pointer;
+  margin: 10px 0;
+  padding: 5px 0;
+  font-size: 0.82em;
+  color: var(--h-muted);
+  text-align: center;
+  border-top: 1px solid var(--h-border);
+  border-bottom: 1px solid var(--h-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compaction:hover { color: var(--vscode-foreground); }
+.compaction .body {
+  display: none;
+  margin-top: 8px;
+  padding-top: 8px;
+  font-size: 0.95em;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--h-border);
+}
+.compaction.expanded { white-space: normal; }
+.compaction.expanded .body { display: block; }
+
+/* Sits in the composer footer only once the transcript is half-way to the
+   budget, so it is a warning rather than a permanent readout. */
+.context-pill {
+  font-size: 0.78em;
+  color: var(--h-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+}
+.context-pill.near-limit { color: var(--vscode-errorForeground, #f14c4c); }
+
 /* Colours derived from --vscode-errorForeground, which every theme defines,
    rather than from the inputValidation.* tokens, which are tuned for an input
    backdrop and are missing from some themes entirely — the same way the

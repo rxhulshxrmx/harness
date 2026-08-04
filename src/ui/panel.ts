@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { runTurn, type UiPort } from "../agent/loop.ts";
+import { estimateTokens } from "../agent/tokens.ts";
 import { createSession, type Session } from "../state/session.ts";
 import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, deleteSession } from "../state/store.ts";
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
@@ -202,6 +203,12 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         : null,
       touchedFiles: this.touchedFiles,
       turnError: this.turnError,
+      // Cheap (a character count over the transcript) and the only warning the
+      // user gets before compaction rewrites their history at 75%.
+      contextUsage: {
+        tokens: estimateTokens(this.session.messages),
+        budget: cfg.get<number>("contextBudget", 100_000),
+      },
       sessionList: this.sessionList,
       approvalMode: cfg.get<string>("approvalMode", "ask"),
       model: cfg.get<string>("model", ""),
