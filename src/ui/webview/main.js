@@ -6,6 +6,7 @@ let state = {
   streamingText: "",
   pendingApproval: null,
   touchedFiles: [],
+  turnError: null,
   sessionList: [],
   approvalMode: "ask",
   model: "",
@@ -314,6 +315,16 @@ function renderMessages() {
     const div = document.createElement("div");
     div.className = "working";
     div.textContent = "Working…";
+    messagesEl.appendChild(div);
+  }
+
+  // Its own block, not an arm of the chain above: an error can land alongside a
+  // partial reply that was salvaged into the transcript, and it must be visible
+  // in that case too.
+  if (state.turnError) {
+    const div = document.createElement("div");
+    div.className = "turn-error";
+    div.textContent = state.turnError;
     messagesEl.appendChild(div);
   }
 

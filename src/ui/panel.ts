@@ -36,6 +36,10 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
   private controller: AbortController | null = null;
   private streamTimer: ReturnType<typeof setTimeout> | null = null;
   private hasClientSecret = false;
+  // Why the last turn stopped, shown in the transcript until the next one
+  // starts. Deliberately not a session message: it is local to this window and
+  // must never be sent to the model as conversation.
+  private turnError: string | null = null;
   private sessionList: { id: string; title: string }[] = [];
   private connectionTest: { state: "idle" | "testing" | "ok" | "error"; message?: string } = { state: "idle" };
   private models: { state: "idle" | "loading" | "ready" | "error"; list: Deployment[]; message?: string } = {
@@ -197,6 +201,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
           }
         : null,
       touchedFiles: this.touchedFiles,
+      turnError: this.turnError,
       sessionList: this.sessionList,
       approvalMode: cfg.get<string>("approvalMode", "ask"),
       model: cfg.get<string>("model", ""),
@@ -339,6 +344,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         this.session.filePath = this.tryCreateSessionFilePath(this.session);
         this.sessionList.unshift({ id: this.session.id, title: "New Session" });
         this.touchedFiles = [];
+        this.turnError = null;
         this.postState();
         break;
       case "selectSession": {
@@ -352,6 +358,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
             break;
           }
           this.touchedFiles = [];
+          this.turnError = null;
           this.postState();
         }
         break;
@@ -375,6 +382,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
           this.session.filePath = this.tryCreateSessionFilePath(this.session);
           this.sessionList.unshift({ id: this.session.id, title: "New Session" });
           this.touchedFiles = [];
+          this.turnError = null;
         }
         this.postState();
         break;
@@ -513,6 +521,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
             );
           }
           this.touchedFiles = [];
+          this.turnError = null;
           this.postState();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -526,6 +535,7 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
   private async startTurn(text: string) {
     this.streamingText = "";
     this.touchedFiles = [];
+    this.turnError = null;
     this.controller = new AbortController();
     this.postState();
 
@@ -543,6 +553,14 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         this.streamingText = "";
         this.postState();
       },
+      showError: (message) => {
+        // Same buffer reset as messagesChanged: anything already streamed has
+        // been salvaged into the transcript by the turn loop.
+        this.cancelStreamPost();
+        this.streamingText = "";
+        this.turnError = message;
+        this.postState();
+      },
       requestApproval: ({ command, reason, severity }) =>
         new Promise<boolean>((resolve) => {
           this.pendingApproval = { id: crypto.randomBytes(4).toString("hex"), command, reason, severity, resolve };
@@ -551,9 +569,6 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
       showTurnDiff: (files) => {
         this.touchedFiles = files;
         this.postState();
-      },
-      showError: (message) => {
-        vscode.window.showErrorMessage(`Couplet: ${message}`);
       },
     };
 

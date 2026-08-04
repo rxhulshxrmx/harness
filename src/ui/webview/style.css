@@ -289,6 +289,21 @@ button {
 .msg code.file-ref { cursor: pointer; color: var(--vscode-textLink-foreground); }
 .msg code.file-ref:hover { text-decoration: underline; }
 
+/* Colours derived from --vscode-errorForeground, which every theme defines,
+   rather than from the inputValidation.* tokens, which are tuned for an input
+   backdrop and are missing from some themes entirely — the same way the
+   composer divider went invisible. */
+.turn-error {
+  margin: 6px 0;
+  padding: 7px 10px;
+  font-size: 0.9em;
+  color: var(--vscode-errorForeground, #f14c4c);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 9%, transparent);
+  border-left: 2px solid var(--vscode-errorForeground, #f14c4c);
+  border-radius: 0 var(--h-radius-md) var(--h-radius-md) 0;
+  overflow-wrap: anywhere;
+}
+
 /* Shown between sending and the first token. Pulses rather than spins so it
    reads as "waiting", and it is the same muted grey as a tool call so it never
    competes with the reply that replaces it. */

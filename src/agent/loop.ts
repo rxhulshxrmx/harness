@@ -25,6 +25,11 @@ export interface UiPort {
   messagesChanged(): void;
   requestApproval(request: ApprovalRequest): Promise<boolean>;
   showTurnDiff(files: string[]): void;
+  /**
+   * A turn could not finish. Belongs in the transcript, next to the message
+   * that failed — a toast in the corner disappears, and leaves the chat looking
+   * as though the agent simply stopped talking.
+   */
   showError(message: string): void;
 }
 
@@ -35,6 +40,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
   appendToStore(session, userMessage);
   ui.messagesChanged();
   diffTracker.beginTurn();
+  let partial = "";
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -46,12 +52,20 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
         await compact(session);
       }
 
+      // Kept alongside the UI's copy so a failure part-way through a reply can
+      // still commit what did arrive. Losing half an answer to a dropped
+      // connection wastes the tokens that produced it.
+      partial = "";
       const assistant = await chat(
         [systemMessage(session), ...session.messages],
         getToolSchemas(),
-        (d) => ui.streamAssistantText(d),
+        (d) => {
+          partial += d;
+          ui.streamAssistantText(d);
+        },
         signal,
       );
+      partial = "";
       session.messages.push(assistant);
       appendToStore(session, assistant);
       ui.messagesChanged();
@@ -84,8 +98,17 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     ui.showError(`Step budget (${MAX_STEPS}) exhausted for this turn.`);
   } catch (err) {
     const classified = classifyError(err);
+    // Whatever the model had already said before the failure belongs in the
+    // transcript: it is real output, and dropping it also drops the context the
+    // next turn would build on.
+    if (partial) {
+      const salvaged = { role: "assistant" as const, content: partial };
+      session.messages.push(salvaged);
+      appendToStore(session, salvaged);
+    }
     // An abort is the user clicking Stop — expected, not an error to surface.
     if (classified.category !== "aborted") ui.showError(classified.message);
+    else ui.messagesChanged();
   } finally {
     const touchedFiles = diffTracker.endTurn();
     // Found by reference, not by the count captured at turn start: a
