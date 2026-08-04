@@ -534,6 +534,15 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
         this.streamingText += delta;
         this.postStreamThrottled();
       },
+      // Whatever was streaming has now been appended to the transcript, so drop
+      // the streaming buffer as well as any post still queued for it — leaving
+      // it would render the same reply twice, once as a message and once as a
+      // live block.
+      messagesChanged: () => {
+        this.cancelStreamPost();
+        this.streamingText = "";
+        this.postState();
+      },
       requestApproval: ({ command, reason, severity }) =>
         new Promise<boolean>((resolve) => {
           this.pendingApproval = { id: crypto.randomBytes(4).toString("hex"), command, reason, severity, resolve };

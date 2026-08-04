@@ -15,6 +15,14 @@ const MAX_STEPS = 40;
 
 export interface UiPort {
   streamAssistantText(delta: string): void;
+  /**
+   * The transcript has gained a message. Called as soon as one is appended
+   * rather than only at the end of the turn, so the user's own message shows up
+   * the moment they send it — it used to sit invisible until the whole turn
+   * finished, which left no sign the extension had received anything — and so
+   * tool calls appear as they run.
+   */
+  messagesChanged(): void;
   requestApproval(request: ApprovalRequest): Promise<boolean>;
   showTurnDiff(files: string[]): void;
   showError(message: string): void;
@@ -25,6 +33,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
   const userMessage = { role: "user" as const, content: userText };
   session.messages.push(userMessage);
   appendToStore(session, userMessage);
+  ui.messagesChanged();
   diffTracker.beginTurn();
 
   try {
@@ -45,6 +54,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
       );
       session.messages.push(assistant);
       appendToStore(session, assistant);
+      ui.messagesChanged();
 
       if (!assistant.tool_calls?.length) return;
 
@@ -60,6 +70,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
           const msg = { role: "tool" as const, tool_call_id: call.id, content: result };
           session.messages.push(msg);
           appendToStore(session, msg);
+          ui.messagesChanged();
           processedCallIds.add(call.id);
         }
       } finally {

@@ -307,6 +307,14 @@ function renderMessages() {
     div.id = "streamingMsg";
     div.appendChild(renderMarkdown(state.streamingText));
     messagesEl.appendChild(div);
+  } else if (state.streaming && !state.pendingApproval) {
+    // The gap between sending and the first token covers a token fetch, a
+    // deployment lookup and the model's own latency. Without a mark here the
+    // panel looks inert for those seconds.
+    const div = document.createElement("div");
+    div.className = "working";
+    div.textContent = "Working…";
+    messagesEl.appendChild(div);
   }
 
   if (state.pendingApproval) {
