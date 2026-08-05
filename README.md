@@ -19,8 +19,8 @@ You need one file: `couplet-<version>.vsix`. Pick whichever is easier.
 **From a terminal:**
 
 ```sh
-code --install-extension couplet-0.0.18.vsix     # VS Code
-cursor --install-extension couplet-0.0.18.vsix   # Cursor
+code --install-extension couplet-0.0.19.vsix     # VS Code
+cursor --install-extension couplet-0.0.19.vsix   # Cursor
 ```
 
 Then reload the window.
@@ -93,7 +93,6 @@ Most people never need these — the settings panel covers the common ones.
 | `couplet.clientId` | `""` | SAP AI Core client ID |
 | `couplet.aiCoreBaseUrl` | `""` | `serviceurls.AI_API_URL` from the service key |
 | `couplet.tokenUrl` | `""` | OAuth token URL (`url` from the service key) |
-| `couplet.deploymentId` | `""` | Optional. Pins one deployment; empty means resolve it from the model |
 | `couplet.resourceGroup` | `"default"` | AI Core resource group header |
 | `couplet.apiVersion` | `"2024-10-21"` | Inference API version |
 | `couplet.model` | `""` | Model to route to, as `name:version` |
@@ -102,3 +101,10 @@ Most people never need these — the settings panel covers the common ones.
 
 The client secret is deliberately absent from this table — it lives in
 SecretStorage and has no `settings.json` key.
+
+There is no deployment ID setting to fill in. Couplet lists the running
+deployments in your resource group and picks the one serving your chosen model,
+re-resolving automatically if a redeploy issues a new id. If your tenant somehow
+exposes a deployment that cannot be discovered, adding `"couplet.deploymentId"`
+to `settings.json` by hand still pins that id — it is read but intentionally
+unlisted, so it never shows up as a setup step.

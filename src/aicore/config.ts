@@ -52,9 +52,12 @@ export function readConfig() {
   const vscode = require("vscode");
   const cfg = vscode.workspace.getConfiguration("couplet");
   return {
-    // Optional: an escape hatch for pinning one deployment by hand. Left empty
-    // (the default) the deployment is resolved from the chosen model instead —
-    // see resolveDeploymentId in models.ts.
+    // Deliberately not declared in package.json's contributes.configuration, so
+    // it does not appear in the settings UI as something to fill in — there is
+    // nothing here a user should have to find. It is still read, as a rescue
+    // hatch for a tenant whose deployment cannot be discovered: setting it by
+    // hand in settings.json pins that id. Empty (the normal case) means resolve
+    // it from the chosen model — see resolveDeploymentId in models.ts.
     deploymentId: cfg.get<string>("deploymentId", "").trim(),
     resourceGroup: cfg.get<string>("resourceGroup", "default").trim() || "default",
     apiVersion: cfg.get<string>("apiVersion", "2024-10-21"),

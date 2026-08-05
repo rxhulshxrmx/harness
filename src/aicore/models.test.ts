@@ -23,7 +23,7 @@ test("skips deployments that are not RUNNING", () => {
   assert.deepEqual(out.map((d) => d.id), ["b"]);
 });
 
-test("skips entries with no model block, such as orchestration deployments", () => {
+test("hides entries with no model block while a named model is available", () => {
   const out = parseDeployments({
     resources: [
       { id: "orch", targetStatus: "RUNNING", scenarioId: "orchestration", details: { resources: {} } },
@@ -31,6 +31,24 @@ test("skips entries with no model block, such as orchestration deployments", () 
     ],
   });
   assert.deepEqual(out.map((d) => d.id), ["real"]);
+});
+
+test("falls back to model-less deployments rather than showing nothing", () => {
+  const out = parseDeployments({
+    resources: [
+      { id: "d-orch", targetStatus: "RUNNING", scenarioId: "orchestration", details: { resources: {} } },
+      { id: "d-cfg", targetStatus: "RUNNING", configurationName: "team-gpt", details: { resources: {} } },
+      { id: "d-bare", targetStatus: "RUNNING" },
+    ],
+  });
+  assert.deepEqual(out.map((d) => d.label), ["d-bare", "orchestration", "team-gpt"]);
+});
+
+test("a stopped model-less deployment is still dropped", () => {
+  const out = parseDeployments({
+    resources: [{ id: "x", targetStatus: "STOPPED", scenarioId: "orchestration" }],
+  });
+  assert.deepEqual(out, []);
 });
 
 test("falls back to the bare name when no version is present", () => {
