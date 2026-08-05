@@ -527,10 +527,6 @@ function renderTail(tailEl) {
         vscode.postMessage({ type: "approve", id: state.pendingApproval.id, always: true }),
       );
       menu.appendChild(always);
-      const note = document.createElement("div");
-      note.className = "approve-extra-note";
-      note.textContent = "Runs these without asking, in this workspace only. Change it in settings.";
-      menu.appendChild(note);
       caret.addEventListener("click", (e) => {
         e.stopPropagation();
         div.classList.toggle("menu-open");
