@@ -361,6 +361,38 @@ button {
   .working { animation: none; opacity: 0.75; }
 }
 
+/* A run of tool calls. While `live` there is no header and the rows show, so a
+   turn in progress reads as it happens; once closed the rows hide behind a
+   single summary line that expands on click. */
+.action-group { margin: 4px 0; }
+.action-group-header {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 8px;
+  background: none;
+  border: 1px solid var(--h-border);
+  border-radius: var(--h-radius-md);
+  color: var(--h-muted);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.88em;
+  text-align: left;
+  cursor: pointer;
+}
+.action-group:not(.live) .action-group-header { display: flex; }
+.action-group-header:hover { background: var(--h-surface-hover); color: var(--vscode-foreground); }
+.action-group-header .caret {
+  display: inline-flex;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.action-group-header .caret svg { width: 12px; height: 12px; }
+.action-group.expanded .action-group-header .caret { transform: rotate(90deg); }
+.action-group-header .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-group:not(.live):not(.expanded) .action-group-body { display: none; }
+.action-group:not(.live) .action-group-body { margin-top: 3px; padding-left: 10px; }
+
 .tool-call {
   cursor: pointer;
   color: var(--h-muted);
@@ -415,6 +447,57 @@ button {
 .approval-actions button:hover { background: var(--h-surface-hover); }
 .approval-actions button.approve { background: var(--vscode-foreground); color: var(--vscode-editor-background); border-color: transparent; opacity: 0.85; }
 .approval-actions button.approve:hover { opacity: 1; }
+
+/* Split button: Approve, plus a caret for the standing-approval option. The
+   caret only exists when the policy says this command is eligible, so the
+   primary action stays one click and the wider grant takes two. */
+.approve-split { display: flex; }
+.approval-actions .approve-split button.approve { border-radius: var(--h-radius-md) 0 0 var(--h-radius-md); }
+.approval-actions button.approve-more {
+  display: flex;
+  align-items: center;
+  padding: 4px 5px;
+  margin-left: 1px;
+  border-radius: 0 var(--h-radius-md) var(--h-radius-md) 0;
+  background: var(--vscode-foreground);
+  color: var(--vscode-editor-background);
+  border-color: transparent;
+  opacity: 0.85;
+}
+.approval-actions button.approve-more:hover { opacity: 1; background: var(--vscode-foreground); }
+.approve-more svg { width: 13px; height: 13px; transition: transform 0.15s; }
+.approval.menu-open .approve-more svg { transform: rotate(180deg); }
+
+/* Inline rather than a popover: this sits inside the scrolling transcript,
+   where a floating menu would be clipped by the scroll container or would
+   cover the command being judged. */
+.approve-extra { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--h-border); }
+.approval.menu-open .approve-extra { display: block; }
+.approval .approve-extra button {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  text-align: left;
+  border: 1px solid var(--h-border);
+  border-radius: var(--h-radius-md);
+  background: none;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+.approval .approve-extra button:hover { background: var(--h-surface-hover); }
+.approve-extra code {
+  background: var(--vscode-textCodeBlock-background);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+}
+.approve-extra-note {
+  padding: 6px 8px 0;
+  color: var(--h-muted);
+  font-size: 0.82em;
+  line-height: 1.35;
+}
 
 /* Touched files chips */
 

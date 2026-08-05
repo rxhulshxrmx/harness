@@ -19,8 +19,8 @@ You need one file: `couplet-<version>.vsix`. Pick whichever is easier.
 **From a terminal:**
 
 ```sh
-code --install-extension couplet-0.0.19.vsix     # VS Code
-cursor --install-extension couplet-0.0.19.vsix   # Cursor
+code --install-extension couplet-0.0.20.vsix     # VS Code
+cursor --install-extension couplet-0.0.20.vsix   # Cursor
 ```
 
 Then reload the window.
@@ -64,12 +64,39 @@ commands to complete the task.
 - **Approval mode** — the `Ask`/`Auto` pill in the composer. `Ask` (default)
   prompts before every shell command. `Auto` runs a small allowlist of read-only
   and test commands unattended and still prompts for everything else.
+- **Always allow** — the caret next to **Approve** offers a standing approval
+  for that kind of command, e.g. `npm run`, so you are not asked again for it in
+  this workspace. See below for what is and is not eligible.
+- **Actions fold away** — while the agent works, each tool call is listed as it
+  runs. Once the agent replies, the whole run collapses into one line
+  (`6 actions · read_file, bash`) that expands on click, so a long turn does not
+  bury the answer.
 - **Rewind (⟲)** — hover any of your messages to undo that turn: the files it
   changed are restored and the chat is truncated back to that point.
 - **History** — the clock icon lists past sessions in this workspace; each row
   has a delete button.
 - **Touched files** — chips above the composer link to a diff, with a revert
   button per file.
+
+### Standing approvals
+
+The **Always allow** option stores a pattern — the program plus a bare
+subcommand, so approving `npm run build` grants `npm run`, not `npm`. Four rules
+bound it:
+
+- Anything carrying shell metacharacters (`&&`, `|`, `;`, backticks, `$(`, `>`)
+  is never eligible, so a grant for `npm test` can never cover
+  `npm test && curl … | sh`.
+- Anything the policy treats as destructive or noteworthy — `rm`, `sudo`,
+  `git push`, `curl`, `wget`, redirects, absolute paths — is never eligible. The
+  caret simply is not offered.
+- Every rule is re-checked when a command is matched, not only when the pattern
+  was stored, and matching is on the derived pattern rather than a string
+  prefix. `npmfoo run` does not match `npm run`.
+- Grants are per-workspace and stored outside the repository. `couplet.alwaysAllow`
+  is honoured only from your **user** settings; a workspace value is ignored, so
+  a cloned repository cannot ship `.vscode/settings.json` that grants itself
+  permission to run its own commands unattended.
 
 ### Keeping the agent away from certain files
 
@@ -97,6 +124,7 @@ Most people never need these — the settings panel covers the common ones.
 | `couplet.apiVersion` | `"2024-10-21"` | Inference API version |
 | `couplet.model` | `""` | Model to route to, as `name:version` |
 | `couplet.approvalMode` | `"ask"` | `ask` or `auto` |
+| `couplet.alwaysAllow` | `[]` | Command patterns to run without asking; user settings only |
 | `couplet.contextBudget` | `100000` | Token budget before the transcript is compacted |
 
 The client secret is deliberately absent from this table — it lives in

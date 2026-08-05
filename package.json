@@ -3,7 +3,7 @@
   "displayName": "Couplet",
   "description": "An agentic coding assistant running inside VS Code, powered by SAP AI Core.",
   "publisher": "sharma-so",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "license": "MIT",
   "icon": "media/icon.png",
   "engines": {
@@ -79,6 +79,15 @@
             "auto"
           ],
           "default": "ask"
+        },
+        "couplet.alwaysAllow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "application",
+          "description": "Command patterns to run without asking, e.g. \"npm run\". Only your user-settings value is honoured — a workspace value is ignored, so a cloned repository cannot grant itself permissions. Grants made from the Approve menu are stored per-workspace, outside the repo. Destructive commands are never eligible, and an entry here grants nothing the approval policy would refuse."
         },
         "couplet.contextBudget": {
           "type": "number",

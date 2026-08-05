@@ -257,7 +257,57 @@ const SUMMARY_PREFIX = "[Session summary]";
 // calls used to mean ten teardowns and rebuilds of the entire transcript,
 // which is the cost that grows with session length rather than with the work
 // being done.
-let rendered = { sessionId: null, count: 0, turnIndex: 0, lastFingerprint: "" };
+let rendered = { sessionId: null, count: 0, turnIndex: 0, lastFingerprint: "", group: null };
+
+// A run of consecutive tool calls and results is one unit of "what the agent
+// did to answer this". While the run is still going it stays open, because that
+// is the only live sign of progress; once the agent speaks again the whole run
+// folds into a single line, so a turn that touched twenty files does not bury
+// the reply that explains it.
+function openActionGroup(messagesEl) {
+  if (rendered.group) return rendered.group;
+  const group = document.createElement("div");
+  group.className = "action-group live";
+
+  const header = document.createElement("button");
+  header.className = "action-group-header";
+  const caret = document.createElement("span");
+  caret.className = "caret";
+  caret.innerHTML =
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>';
+  const label = document.createElement("span");
+  label.className = "label";
+  header.appendChild(caret);
+  header.appendChild(label);
+  header.addEventListener("click", () => group.classList.toggle("expanded"));
+
+  const body = document.createElement("div");
+  body.className = "action-group-body";
+
+  group.appendChild(header);
+  group.appendChild(body);
+  messagesEl.appendChild(group);
+  rendered.group = { el: group, body, label, count: 0, names: [] };
+  return rendered.group;
+}
+
+function addAction(messagesEl, node, name) {
+  const group = openActionGroup(messagesEl);
+  group.body.appendChild(node);
+  group.count++;
+  if (name && !group.names.includes(name)) group.names.push(name);
+  const shown = group.names.slice(0, 3).join(", ");
+  const more = group.names.length > 3 ? ` +${group.names.length - 3}` : "";
+  group.label.textContent = group.names.length
+    ? `${group.count} action${group.count === 1 ? "" : "s"} · ${shown}${more}`
+    : `${group.count} action${group.count === 1 ? "" : "s"}`;
+}
+
+function closeActionGroup() {
+  if (!rendered.group) return;
+  rendered.group.el.classList.remove("live");
+  rendered.group = null;
+}
 
 // Identifies the final rendered message well enough to notice that history was
 // rewritten underneath us without deep-comparing the whole transcript.
@@ -294,7 +344,7 @@ function messageNodes(msg) {
       // runTurn numbers turns by counting user messages, and the summary is one
       // of those, so skipping it here would offset every rewind after a
       // compaction by one and restore the wrong turn.
-      nodes.push({ node: div, consumesTurn: true });
+      nodes.push({ node: div, consumesTurn: true, kind: "message" });
       return nodes;
     }
     const currentTurn = rendered.turnIndex;
@@ -312,23 +362,29 @@ function messageNodes(msg) {
     // a leading button would push it out of alignment with everything else.
     div.appendChild(bubble);
     div.appendChild(rewindBtn);
-    nodes.push({ node: div, consumesTurn: true });
+    nodes.push({ node: div, consumesTurn: true, kind: "message" });
   } else if (msg.role === "assistant") {
     if (msg.content) {
       const div = document.createElement("div");
       div.className = "msg assistant";
       div.appendChild(renderMarkdown(msg.content));
-      nodes.push({ node: div, consumesTurn: false });
+      nodes.push({ node: div, consumesTurn: false, kind: "message" });
     }
     for (const call of msg.tool_calls ?? []) {
       nodes.push({
         node: collapsible("tool-call", `${call.function.name} ${call.function.arguments}`, call.function.arguments),
         consumesTurn: false,
+        kind: "action",
+        name: call.function.name,
       });
     }
   } else if (msg.role === "tool") {
     const content = msg.content || "";
-    nodes.push({ node: collapsible("tool-call", content.split("\n")[0].slice(0, 80), content), consumesTurn: false });
+    nodes.push({
+      node: collapsible("tool-call", content.split("\n")[0].slice(0, 80), content),
+      consumesTurn: false,
+      kind: "action",
+    });
   }
   return nodes;
 }
@@ -347,7 +403,7 @@ function renderMessages() {
 
   if (!appendable) {
     messagesEl.innerHTML = "";
-    rendered = { sessionId: state.session.id, count: 0, turnIndex: 0, lastFingerprint: "" };
+    rendered = { sessionId: state.session.id, count: 0, turnIndex: 0, lastFingerprint: "", group: null };
   }
 
   const tail = el("tail") ?? document.createElement("div");
@@ -355,13 +411,22 @@ function renderMessages() {
   tail.innerHTML = "";
 
   for (let i = rendered.count; i < messages.length; i++) {
-    for (const { node, consumesTurn } of messageNodes(messages[i])) {
+    for (const { node, consumesTurn, kind, name } of messageNodes(messages[i])) {
       if (consumesTurn) rendered.turnIndex++;
-      messagesEl.appendChild(node);
+      if (kind === "action") {
+        addAction(messagesEl, node, name);
+      } else {
+        // Anything the agent or the user says ends the run of actions before it.
+        closeActionGroup();
+        messagesEl.appendChild(node);
+      }
     }
   }
   rendered.count = messages.length;
   rendered.lastFingerprint = fingerprint(messages[messages.length - 1]);
+  // A turn that ends without a closing message — stopped, failed, or out of
+  // steps — would otherwise leave its actions expanded forever.
+  if (!state.streaming) closeActionGroup();
 
   // Transient blocks live in their own container after the messages, so drawing
   // them again never touches a message node.
@@ -426,16 +491,61 @@ function renderTail(tailEl) {
 
     const actions = document.createElement("div");
     actions.className = "approval-actions";
+
+    let pendingExtra = null;
+    const approveWrap = document.createElement("div");
+    approveWrap.className = "approve-split";
     const approveBtn = document.createElement("button");
     approveBtn.className = "approve";
     approveBtn.textContent = "Approve";
     approveBtn.addEventListener("click", () => vscode.postMessage({ type: "approve", id: state.pendingApproval.id }));
+    approveWrap.appendChild(approveBtn);
+
+    // Offered only when the policy says this command is eligible for a standing
+    // approval. For anything destructive the caret is simply not there, rather
+    // than there and refusing.
+    const pattern = state.pendingApproval.alwaysPattern;
+    if (pattern) {
+      const caret = document.createElement("button");
+      caret.className = "approve-more";
+      caret.title = "More approval options";
+      caret.setAttribute("aria-label", "More approval options");
+      caret.innerHTML =
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5 12 6.5"/></svg>';
+      // Opens inline below the buttons rather than as a floating menu: this
+      // block lives inside the scrolling transcript, where a popover would
+      // either be clipped by the scroll container or cover the command the
+      // user is being asked to judge.
+      const menu = document.createElement("div");
+      menu.className = "approve-extra";
+      const always = document.createElement("button");
+      always.appendChild(document.createTextNode("Always allow "));
+      const code = document.createElement("code");
+      code.textContent = pattern;
+      always.appendChild(code);
+      always.addEventListener("click", () =>
+        vscode.postMessage({ type: "approve", id: state.pendingApproval.id, always: true }),
+      );
+      menu.appendChild(always);
+      const note = document.createElement("div");
+      note.className = "approve-extra-note";
+      note.textContent = "Runs these without asking, in this workspace only. Change it in settings.";
+      menu.appendChild(note);
+      caret.addEventListener("click", (e) => {
+        e.stopPropagation();
+        div.classList.toggle("menu-open");
+      });
+      approveWrap.appendChild(caret);
+      pendingExtra = menu;
+    }
+
     const denyBtn = document.createElement("button");
     denyBtn.textContent = "Deny";
     denyBtn.addEventListener("click", () => vscode.postMessage({ type: "deny", id: state.pendingApproval.id }));
-    actions.appendChild(approveBtn);
+    actions.appendChild(approveWrap);
     actions.appendChild(denyBtn);
     div.appendChild(actions);
+    if (pendingExtra) div.appendChild(pendingExtra);
     tailEl.appendChild(div);
   }
 }

@@ -5,7 +5,8 @@ import { resolveShell } from "./shell.ts";
 import type * as vscodeTypes from "vscode";
 import { registerTool, type ToolContext } from "./index.ts";
 import { diffTracker } from "../state/diffTracker.ts";
-import { classifyCommand } from "./commandPolicy.ts";
+import { classifyCommand, matchesAlwaysAllowed } from "./commandPolicy.ts";
+import { getWorkspaceState } from "../aicore/context.ts";
 import type { ToolSchema } from "../aicore/types.ts";
 
 declare function require(id: "vscode"): typeof vscodeTypes;
@@ -17,6 +18,24 @@ let cachedShell: ReturnType<typeof resolveShell> | null = null;
 export function getShell() {
   cachedShell ??= resolveShell(os.platform(), process.env, fs.existsSync);
   return cachedShell;
+}
+
+export const ALWAYS_ALLOW_KEY = "couplet.alwaysAllow";
+
+/**
+ * The standing approvals in force, from the two places they can legitimately
+ * come from: grants the user made in this workspace, and patterns they wrote
+ * into their own user settings.
+ *
+ * The workspace-scoped value of the setting is deliberately ignored. It lives
+ * in .vscode/settings.json, which arrives with a cloned repository, so honouring
+ * it would let a project grant itself permission to run its own commands
+ * unattended — exactly the gate the approval prompt exists to hold.
+ */
+function readAlwaysAllowed(cfg: vscodeTypes.WorkspaceConfiguration): string[] {
+  const fromUserSettings = cfg.inspect<string[]>("alwaysAllow")?.globalValue ?? [];
+  const granted = getWorkspaceState().get<string[]>(ALWAYS_ALLOW_KEY, []);
+  return [...fromUserSettings, ...granted];
 }
 
 function recordGitTouchedFiles(workspaceRoot: string) {
@@ -54,10 +73,16 @@ registerTool("bash", {
     const timeoutMs = Math.min(300_000, args.timeout_ms ?? 60_000);
 
     const vscode = require("vscode");
-    const approvalMode = vscode.workspace.getConfiguration("couplet").get<string>("approvalMode", "ask");
+    const cfg = vscode.workspace.getConfiguration("couplet");
+    const approvalMode = cfg.get<string>("approvalMode", "ask");
 
     const classification = classifyCommand(command);
-    const autoOk = approvalMode === "auto" && classification.decision === "allow";
+    const autoOk =
+      (approvalMode === "auto" && classification.decision === "allow") ||
+      // Standing approval the user granted from a previous prompt. Independent
+      // of approvalMode: it is a decision about this command, not about how
+      // trusting to be in general.
+      matchesAlwaysAllowed(command, readAlwaysAllowed(cfg));
     if (!autoOk) {
       const approved = await ctx.requestApproval({
         command,

@@ -8,6 +8,9 @@ import { listSessions, loadSession, newSessionFilePath, updateSessionTitle, dele
 import { deleteCheckpointsFrom } from "../state/checkpoints.ts";
 import { rewindToTurn } from "../state/rewind.ts";
 import { getWorkspaceRoot, resolveWithinRoot } from "../tools/index.ts";
+import { alwaysAllowPattern } from "../tools/commandPolicy.ts";
+import { ALWAYS_ALLOW_KEY } from "../tools/bash.ts";
+import { getWorkspaceState } from "../aicore/context.ts";
 import { chat } from "../aicore/client.ts";
 import { CLIENT_SECRET_KEY, readConfig } from "../aicore/config.ts";
 import { normalizeAuthUrl, normalizeApiUrl } from "../aicore/urls.ts";
@@ -169,6 +172,24 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Records a standing approval, per-workspace: trusting "npm run" in this repo
+   * says nothing about trusting it in the next one, and quietly widening that to
+   * every project the user opens would be the wrong default for a permission.
+   *
+   * Stored in the extension's own workspace state rather than in workspace
+   * settings, because .vscode/settings.json travels with a repository — writing
+   * permissions there would mean a cloned project could arrive already holding
+   * them. See readAlwaysAllowed in tools/bash.ts, which ignores the
+   * workspace-scoped setting for the same reason.
+   */
+  private async rememberAlwaysAllow(pattern: string) {
+    const state = getWorkspaceState();
+    const current = state.get<string[]>(ALWAYS_ALLOW_KEY, []);
+    if (current.includes(pattern)) return;
+    await state.update(ALWAYS_ALLOW_KEY, [...current, pattern]);
+  }
+
   private async saveCredentialSetting(key: string, value: unknown) {
     await this.saveGlobalSetting(key, value);
     this.onCredentialsChanged();
@@ -199,6 +220,9 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
             command: this.pendingApproval.command,
             reason: this.pendingApproval.reason,
             severity: this.pendingApproval.severity,
+            // null hides the "always allow" option entirely, which is how a
+            // command that must never get a standing approval stays that way.
+            alwaysPattern: alwaysAllowPattern(this.pendingApproval.command),
           }
         : null,
       touchedFiles: this.touchedFiles,
@@ -331,6 +355,14 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
       case "deny": {
         const pending = this.pendingApproval;
         if (pending && pending.id === msg.id) {
+          // "Always allow" is an approve that also remembers. The pattern is
+          // re-derived from the command here rather than taken from the
+          // webview: the message crosses a trust boundary, so a crafted
+          // "always" naming some other pattern must not be able to store it.
+          if (msg.type === "approve" && msg.always) {
+            const pattern = alwaysAllowPattern(pending.command);
+            if (pattern) await this.rememberAlwaysAllow(pattern);
+          }
           pending.resolve(msg.type === "approve");
           this.pendingApproval = null;
           this.postState();
