@@ -518,15 +518,20 @@ function renderTail(tailEl) {
       // user is being asked to judge.
       const menu = document.createElement("div");
       menu.className = "approve-extra";
-      const always = document.createElement("button");
-      always.appendChild(document.createTextNode("Always allow "));
-      const code = document.createElement("code");
-      code.textContent = pattern;
-      always.appendChild(code);
-      always.addEventListener("click", () =>
-        vscode.postMessage({ type: "approve", id: state.pendingApproval.id, always: true }),
-      );
-      menu.appendChild(always);
+      const grant = (scope, before, after) => {
+        const btn = document.createElement("button");
+        btn.appendChild(document.createTextNode(before));
+        const code = document.createElement("code");
+        code.textContent = pattern;
+        btn.appendChild(code);
+        if (after) btn.appendChild(document.createTextNode(after));
+        btn.addEventListener("click", () =>
+          vscode.postMessage({ type: "approve", id: state.pendingApproval.id, always: scope }),
+        );
+        menu.appendChild(btn);
+      };
+      grant("global", "Always allow ", "");
+      grant("workspace", "Allow ", " in this workspace");
       caret.addEventListener("click", (e) => {
         e.stopPropagation();
         div.classList.toggle("menu-open");

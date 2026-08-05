@@ -173,21 +173,30 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Records a standing approval, per-workspace: trusting "npm run" in this repo
-   * says nothing about trusting it in the next one, and quietly widening that to
-   * every project the user opens would be the wrong default for a permission.
+   * Records a standing approval at the scope the user chose.
    *
-   * Stored in the extension's own workspace state rather than in workspace
-   * settings, because .vscode/settings.json travels with a repository — writing
-   * permissions there would mean a cloned project could arrive already holding
-   * them. See readAlwaysAllowed in tools/bash.ts, which ignores the
+   * "workspace" goes to the extension's own per-workspace state, not to
+   * workspace settings: .vscode/settings.json travels with a repository, so
+   * writing permissions there would mean a cloned project could arrive already
+   * holding them. See readAlwaysAllowed in tools/bash.ts, which ignores the
    * workspace-scoped setting for the same reason.
+   *
+   * "global" goes to user settings rather than to hidden global state, so a
+   * permission that applies everywhere is one the user can see and revoke in
+   * the settings UI. Nothing a repository ships can reach it.
    */
-  private async rememberAlwaysAllow(pattern: string) {
-    const state = getWorkspaceState();
-    const current = state.get<string[]>(ALWAYS_ALLOW_KEY, []);
+  private async rememberAlwaysAllow(pattern: string, scope: "global" | "workspace") {
+    if (scope === "workspace") {
+      const state = getWorkspaceState();
+      const current = state.get<string[]>(ALWAYS_ALLOW_KEY, []);
+      if (current.includes(pattern)) return;
+      await state.update(ALWAYS_ALLOW_KEY, [...current, pattern]);
+      return;
+    }
+    const cfg = vscode.workspace.getConfiguration("couplet");
+    const current = cfg.inspect<string[]>("alwaysAllow")?.globalValue ?? [];
     if (current.includes(pattern)) return;
-    await state.update(ALWAYS_ALLOW_KEY, [...current, pattern]);
+    await cfg.update("alwaysAllow", [...current, pattern], vscode.ConfigurationTarget.Global);
   }
 
   private async saveCredentialSetting(key: string, value: unknown) {
@@ -359,9 +368,9 @@ export class CoupletPanel implements vscode.WebviewViewProvider {
           // re-derived from the command here rather than taken from the
           // webview: the message crosses a trust boundary, so a crafted
           // "always" naming some other pattern must not be able to store it.
-          if (msg.type === "approve" && msg.always) {
+          if (msg.type === "approve" && (msg.always === "global" || msg.always === "workspace")) {
             const pattern = alwaysAllowPattern(pending.command);
-            if (pattern) await this.rememberAlwaysAllow(pattern);
+            if (pattern) await this.rememberAlwaysAllow(pattern, msg.always);
           }
           pending.resolve(msg.type === "approve");
           this.pendingApproval = null;

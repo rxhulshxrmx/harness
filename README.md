@@ -19,8 +19,8 @@ You need one file: `couplet-<version>.vsix`. Pick whichever is easier.
 **From a terminal:**
 
 ```sh
-code --install-extension couplet-0.0.21.vsix     # VS Code
-cursor --install-extension couplet-0.0.21.vsix   # Cursor
+code --install-extension couplet-0.0.22.vsix     # VS Code
+cursor --install-extension couplet-0.0.22.vsix   # Cursor
 ```
 
 Then reload the window.
@@ -65,8 +65,8 @@ commands to complete the task.
   prompts before every shell command. `Auto` runs a small allowlist of read-only
   and test commands unattended and still prompts for everything else.
 - **Always allow** — the caret next to **Approve** offers a standing approval
-  for that kind of command, e.g. `npm run`, so you are not asked again for it in
-  this workspace. See below for what is and is not eligible.
+  for that kind of command, e.g. `npm run`, either everywhere or in this
+  workspace only. See below for what is and is not eligible.
 - **Actions fold away** — while the agent works, each tool call is listed as it
   runs. Once the agent replies, the whole run collapses into one line
   (`6 actions · read_file, bash`) that expands on click, so a long turn does not
@@ -93,10 +93,13 @@ bound it:
 - Every rule is re-checked when a command is matched, not only when the pattern
   was stored, and matching is on the derived pattern rather than a string
   prefix. `npmfoo run` does not match `npm run`.
-- Grants are per-workspace and stored outside the repository. `couplet.alwaysAllow`
-  is honoured only from your **user** settings; a workspace value is ignored, so
-  a cloned repository cannot ship `.vscode/settings.json` that grants itself
-  permission to run its own commands unattended.
+- Neither scope can be reached by a repository. **Always allow** writes to your
+  user settings, where you can see and revoke it; **Allow in this workspace**
+  is kept in the extension's own per-workspace storage, outside the repo.
+  `couplet.alwaysAllow` is honoured only from your **user** settings — a
+  workspace value is ignored, so a cloned repository cannot ship a
+  `.vscode/settings.json` granting itself permission to run its own commands
+  unattended.
 
 ### Keeping the agent away from certain files
 
