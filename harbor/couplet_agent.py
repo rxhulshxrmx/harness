@@ -56,7 +56,11 @@ from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
 COUPLET_REPO_URL = "https://github.com/rxhulshxrmx/couplet.git"
-COUPLET_REF = "main"  # TODO: pin to a commit/tag before recording a scored run
+# Pinned to the commit the headless CLI (src/cli/main.ts) was smoke-tested
+# against — see the commit that introduced this adapter. Move this forward
+# deliberately, not by tracking a branch, so a benchmark score stays
+# reproducible against the exact build it measured.
+COUPLET_REF = "6c6099acf8b3d26e2603d4b9fbba0ad72ef37826"
 INSTALL_DIR = "/installed-agent/couplet"
 
 # Read directly by src/cli/main.ts — see its --help text (`node dist/cli.js --help`).
@@ -94,9 +98,15 @@ class CoupletAgent(BaseInstalledAgent):
             command=(
                 "set -euo pipefail; "
                 f"{nvm_node_install_snippet()} && "
-                f"git clone --depth 1 --branch {shlex.quote(COUPLET_REF)} "
-                f"{shlex.quote(COUPLET_REPO_URL)} {shlex.quote(INSTALL_DIR)} && "
-                f"cd {shlex.quote(INSTALL_DIR)} && npm ci && npm run build && "
+                # `clone --branch <sha>` only accepts an actual branch/tag
+                # name, not a bare commit SHA — init+fetch+checkout is the
+                # standard way to shallow-fetch one arbitrary commit instead.
+                # GitHub allows fetching any reachable SHA for public repos.
+                f"mkdir -p {shlex.quote(INSTALL_DIR)} && cd {shlex.quote(INSTALL_DIR)} && "
+                f"git init -q && git remote add origin {shlex.quote(COUPLET_REPO_URL)} && "
+                f"git fetch --depth 1 origin {shlex.quote(COUPLET_REF)} && "
+                "git checkout -q FETCH_HEAD && "
+                "npm ci && npm run build && "
                 "test -f dist/cli.js"
             ),
         )
