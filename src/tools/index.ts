@@ -1,11 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ignore from "ignore";
-import type * as vscodeTypes from "vscode";
 import type { ToolSchema } from "../aicore/types.ts";
 import { redactSecrets } from "../security/redactSecrets.ts";
-
-declare function require(id: "vscode"): typeof vscodeTypes;
+import { getHost } from "../host.ts";
 
 export interface ApprovalRequest {
   command: string;
@@ -86,18 +84,8 @@ export function resolveWithinRoot(root: string, filePath: string): string {
   return resolved;
 }
 
-// `vscode` is only resolvable inside a live extension host, not under plain
-// `node --test` (there is no "vscode" package in node_modules). Referencing
-// it lazily via `require` inside the function body — instead of a top-level
-// `import` — keeps this module's import graph loadable for unit tests that
-// only exercise the pure helpers below (they never call this function).
-// esbuild bundles this to CJS with "vscode" marked external, so the real
-// extension still gets a plain `require("vscode")` served by the host.
 export function getWorkspaceRoot(): string {
-  const vscode = require("vscode");
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!root) throw new Error("No workspace folder open.");
-  return root;
+  return getHost().workspaceRoot();
 }
 
 const MAX_LEN = 20_000;

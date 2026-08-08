@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import { getHost } from "../host.ts";
 import { chat } from "../aicore/client.ts";
 import { estimateTokens } from "./tokens.ts";
 import { systemMessage } from "./systemPrompt.ts";
@@ -46,8 +46,7 @@ export async function runTurn(session: Session, userText: string, ui: UiPort, si
     for (let step = 0; step < MAX_STEPS; step++) {
       if (signal.aborted) return;
 
-      const cfg = vscode.workspace.getConfiguration("couplet");
-      const budget = cfg.get<number>("contextBudget", 100_000);
+      const budget = getHost().getConfig("contextBudget", 100_000);
       if (estimateTokens(session.messages) > budget * 0.75) {
         await compact(session);
       }

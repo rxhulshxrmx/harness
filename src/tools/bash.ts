@@ -2,14 +2,11 @@ import { spawn, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { resolveShell } from "./shell.ts";
-import type * as vscodeTypes from "vscode";
 import { registerTool, type ToolContext } from "./index.ts";
 import { diffTracker } from "../state/diffTracker.ts";
 import { classifyCommand, matchesAlwaysAllowed } from "./commandPolicy.ts";
-import { getWorkspaceState } from "../aicore/context.ts";
+import { getHost, ALWAYS_ALLOW_KEY } from "../host.ts";
 import type { ToolSchema } from "../aicore/types.ts";
-
-declare function require(id: "vscode"): typeof vscodeTypes;
 
 // Resolving the shell walks PATH, so do it once rather than per command. The
 // system prompt reads the same value, so what the model is told matches what
@@ -20,23 +17,7 @@ export function getShell() {
   return cachedShell;
 }
 
-export const ALWAYS_ALLOW_KEY = "couplet.alwaysAllow";
-
-/**
- * The standing approvals in force, from the two places they can legitimately
- * come from: grants the user made in this workspace, and patterns they wrote
- * into their own user settings.
- *
- * The workspace-scoped value of the setting is deliberately ignored. It lives
- * in .vscode/settings.json, which arrives with a cloned repository, so honouring
- * it would let a project grant itself permission to run its own commands
- * unattended — exactly the gate the approval prompt exists to hold.
- */
-function readAlwaysAllowed(cfg: vscodeTypes.WorkspaceConfiguration): string[] {
-  const fromUserSettings = cfg.inspect<string[]>("alwaysAllow")?.globalValue ?? [];
-  const granted = getWorkspaceState().get<string[]>(ALWAYS_ALLOW_KEY, []);
-  return [...fromUserSettings, ...granted];
-}
+export { ALWAYS_ALLOW_KEY };
 
 function recordGitTouchedFiles(workspaceRoot: string) {
   try {
@@ -72,9 +53,8 @@ registerTool("bash", {
     const command: string = args.command;
     const timeoutMs = Math.min(300_000, args.timeout_ms ?? 60_000);
 
-    const vscode = require("vscode");
-    const cfg = vscode.workspace.getConfiguration("couplet");
-    const approvalMode = cfg.get<string>("approvalMode", "ask");
+    const host = getHost();
+    const approvalMode = host.getConfig<string>("approvalMode", "ask");
 
     const classification = classifyCommand(command);
     const autoOk =
@@ -82,7 +62,7 @@ registerTool("bash", {
       // Standing approval the user granted from a previous prompt. Independent
       // of approvalMode: it is a decision about this command, not about how
       // trusting to be in general.
-      matchesAlwaysAllowed(command, readAlwaysAllowed(cfg));
+      matchesAlwaysAllowed(command, host.getAlwaysAllowed());
     if (!autoOk) {
       const approved = await ctx.requestApproval({
         command,

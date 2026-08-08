@@ -1,9 +1,6 @@
-import type * as vscodeTypes from "vscode";
-import { getSecrets } from "./context.ts";
+import { getHost } from "../host.ts";
 import { normalizeAuthUrl, normalizeApiUrl } from "./urls.ts";
 import type { ServiceKey } from "./types.ts";
-
-declare function require(id: "vscode"): typeof vscodeTypes;
 
 export const CLIENT_SECRET_KEY = "couplet.clientSecret";
 
@@ -32,25 +29,23 @@ export function missingCredentialFields(fields: {
 }
 
 export async function loadServiceKey(): Promise<ServiceKey> {
-  const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("couplet");
-  const clientid = cfg.get<string>("clientId", "").trim();
-  const authUrl = normalizeAuthUrl(cfg.get<string>("tokenUrl", ""));
-  const apiUrl = normalizeApiUrl(cfg.get<string>("aiCoreBaseUrl", ""));
-  const clientsecret = ((await getSecrets().get(CLIENT_SECRET_KEY)) ?? "").trim();
+  const host = getHost();
+  const clientid = host.getConfig("clientId", "").trim();
+  const authUrl = normalizeAuthUrl(host.getConfig("tokenUrl", ""));
+  const apiUrl = normalizeApiUrl(host.getConfig("aiCoreBaseUrl", ""));
+  const clientsecret = ((await host.getSecret(CLIENT_SECRET_KEY)) ?? "").trim();
 
   const missing = missingCredentialFields({ clientid, clientsecret, authUrl, apiUrl });
   if (missing.length) {
     throw new Error(
-      `SAP AI Core credentials are incomplete — missing ${missing.join(", ")}. Open Couplet settings (gear icon) to add them.`,
+      `SAP AI Core credentials are incomplete — missing ${missing.join(", ")}. Open Couplet settings (gear icon) to add them, or set the equivalent COUPLET_* environment variables in headless mode.`,
     );
   }
   return { clientid, clientsecret, url: authUrl, serviceurls: { AI_API_URL: apiUrl } };
 }
 
 export function readConfig() {
-  const vscode = require("vscode");
-  const cfg = vscode.workspace.getConfiguration("couplet");
+  const host = getHost();
   return {
     // Deliberately not declared in package.json's contributes.configuration, so
     // it does not appear in the settings UI as something to fill in — there is
@@ -58,9 +53,9 @@ export function readConfig() {
     // hatch for a tenant whose deployment cannot be discovered: setting it by
     // hand in settings.json pins that id. Empty (the normal case) means resolve
     // it from the chosen model — see resolveDeploymentId in models.ts.
-    deploymentId: cfg.get<string>("deploymentId", "").trim(),
-    resourceGroup: cfg.get<string>("resourceGroup", "default").trim() || "default",
-    apiVersion: cfg.get<string>("apiVersion", "2024-10-21"),
-    model: cfg.get<string>("model", "").trim(),
+    deploymentId: host.getConfig("deploymentId", "").trim(),
+    resourceGroup: host.getConfig("resourceGroup", "default").trim() || "default",
+    apiVersion: host.getConfig("apiVersion", "2024-10-21"),
+    model: host.getConfig("model", "").trim(),
   };
 }

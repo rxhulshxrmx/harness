@@ -16,7 +16,7 @@ export function systemMessage(session: Session): Message {
   const date = new Date().toISOString().slice(0, 10);
   const agentsMd = loadAgentsMd(workspaceRoot);
 
-  const content = `You are Couplet, a coding agent running inside VS Code. You are precise, safe, and
+  const content = `You are Couplet, an autonomous coding agent. You are precise, safe, and
 helpful. You complete tasks autonomously using your tools and only yield back to
 the user when the task is resolved or you are blocked on their input.
 

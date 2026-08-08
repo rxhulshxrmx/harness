@@ -1,13 +1,9 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
-import type * as vscodeTypes from "vscode";
 import { registerTool, resolveWithinRoot, isIgnoredPath, type ToolContext } from "./index.ts";
-import { revealEdit } from "./revealEdit.ts";
+import { getHost } from "../host.ts";
 import { diffTracker } from "../state/diffTracker.ts";
 import { isStale, recordRead } from "../state/fileTracker.ts";
 import type { ToolSchema } from "../aicore/types.ts";
-
-declare function require(id: "vscode"): typeof vscodeTypes;
 
 export interface ReplacementPlan {
   kind: "create" | "replace" | "error";
@@ -94,7 +90,6 @@ const schema: ToolSchema = {
 registerTool("search_replace", {
   schema,
   async execute(argsJson: string, ctx: ToolContext) {
-    const vscode = require("vscode");
     const args = JSON.parse(argsJson);
     const abs = resolveWithinRoot(ctx.workspaceRoot, args.file_path);
     if (isIgnoredPath(ctx.workspaceRoot, abs)) {
@@ -112,24 +107,10 @@ registerTool("search_replace", {
 
     diffTracker.snapshot(args.file_path, current);
 
-    if (plan.kind === "create") {
-      fs.mkdirSync(path.dirname(abs), { recursive: true });
-    }
-
-    const uri = vscode.Uri.file(abs);
-    const edit = new vscode.WorkspaceEdit();
-    if (plan.kind === "create") {
-      edit.createFile(uri, { overwrite: true, contents: Buffer.from(plan.content!, "utf8") });
-    } else {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-      edit.replace(uri, fullRange, plan.content!);
-    }
-    await vscode.workspace.applyEdit(edit);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await doc.save();
+    const host = getHost();
+    await host.writeFile(abs, plan.content!, { create: plan.kind === "create" });
     recordRead(abs);
-    await revealEdit(uri, plan.content!, args.new_string);
+    await host.revealEdit(abs, plan.content!, args.new_string);
 
     if (plan.kind === "create") return `Created ${args.file_path}`;
     return `Updated ${args.file_path}:\n${contextSnippet(plan.content!, args.new_string)}`;

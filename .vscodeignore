@@ -1,6 +1,7 @@
 .vscode/**
 src/**
 docs/**
+harbor/**
 .superpowers/**
 .couplet/**
 .harness/**

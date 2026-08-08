@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { setExtensionContext } from "./aicore/context.ts";
+import { setHost } from "./host.ts";
+import { VscodeHost } from "./vscodeHost.ts";
 import { CoupletPanel } from "./ui/panel.ts";
 import { diffTracker, BeforeContentProvider } from "./state/diffTracker.ts";
 import "./tools/readFile.ts";
@@ -11,6 +13,7 @@ import "./tools/bash.ts";
 
 export function activate(context: vscode.ExtensionContext) {
   setExtensionContext(context);
+  setHost(new VscodeHost(context));
 
   const panel = new CoupletPanel(context.extensionUri, context.secrets);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("couplet.chat", panel));
